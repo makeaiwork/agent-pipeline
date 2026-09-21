@@ -1,0 +1,8 @@
+# Gitignored files that Claude Code copies into the task's worktree (.claude/worktrees/<name>/).
+# Needed by the dev server and the tests (environment variables). Installed dependencies
+# (node_modules, .venv, target) are not copied — task-runner symlinks them to the main checkout
+# (see .claude/agents/task-runner.md, section "The task's working tree — worktree").
+# === PROJECT-SPECIFIC (agent-pipeline init) ===
+.env
+.env.local
+# === /PROJECT-SPECIFIC ===

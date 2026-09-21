@@ -1,0 +1,3 @@
+# agent-pipeline: local pipeline artifacts (pre-compaction snapshots, telemetry, task worktrees)
+.claude/state/
+.claude/worktrees/
