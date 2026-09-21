@@ -51,6 +51,9 @@ constants from the script itself:
 substitute other values, do not pick `ultra`/`max` yourself (the plugin accepts only
 `none|minimal|low|medium|high|xhigh`).
 
+The command must start exactly with `bash .claude/scripts/codex-review.sh run`, without
+`cd … &&` or any other prefix. Set the working directory with `--cwd`, not `cd`.
+
 The prompt is passed on stdin as a heredoc with the marker `CODEX_PROMPT_END` in quotes — the
 quotes disable shell substitutions, and the non-standard marker keeps a line of the task text from
 closing the heredoc early (do not use the `EOF` marker; if the line `CODEX_PROMPT_END` happens to
