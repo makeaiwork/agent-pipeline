@@ -52,7 +52,11 @@ substitute other values, do not pick `ultra`/`max` yourself (the plugin accepts 
 `none|minimal|low|medium|high|xhigh`).
 
 The command must start exactly with `bash .claude/scripts/codex-review.sh run`, without
-`cd … &&` or any other prefix. Set the working directory with `--cwd`, not `cd`.
+`cd … &&` or any other prefix. Set the working directory with `--cwd`, not `cd`: the wrapper
+changes into it itself, and a `cd` before the call breaks the safety hook's exception for the
+heredoc body — the hook then reads the prompt as a command and stops the call at the first
+protected string in the checklist. The hook tolerates exactly one plain `cd <path> && ` as a
+safety net, but that is not permission to use it.
 
 The prompt is passed on stdin as a heredoc with the marker `CODEX_PROMPT_END` in quotes — the
 quotes disable shell substitutions, and the non-standard marker keeps a line of the task text from
@@ -230,6 +234,9 @@ The pipeline does not stop at this: @reviewer takes over your role in the same m
 ## Rules
 
 - Never edit files and never run the build/tests.
+- The Bash call of the wrapper starts at the very first character with
+  `bash .claude/scripts/codex-review.sh`: no `cd`, `export`, `&&`, `;` or any other prefix; the
+  directory is set only with `--cwd`.
 - Never insert the diff into the Codex prompt and do not read it yourself — only the list of paths.
 - Do not make your own judgments about the code — your opinion is not part of the review.
 - Do not shorten the checklist and do not change the response format: the Claude and Codex reports

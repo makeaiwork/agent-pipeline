@@ -37,6 +37,60 @@ CODEX_PROMPT_END'
   'bash .claude/scripts/codex-image-evil.sh --out a.png <<'\''CODEX_PROMPT_END'\''
 git push
 CODEX_PROMPT_END'
+  # `cd` prefix before the wrapper: exactly one, no substitutions, joined by `&&`, path still checked
+  'cd "$(pwd)" && bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd `pwd` && bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd "$HOME/x" && bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd /x && cd /y && bash .claude/scripts/codex-review.sh run --cwd /y --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd /x; bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd /x || bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd ~/.ssh/ && bash .claude/scripts/codex-review.sh run --cwd ~/.ssh/ --model m --effort high <<'\''CODEX_PROMPT_END'\''
+Line
+CODEX_PROMPT_END'
+  'cd /x && cd /y && bash .claude/scripts/codex-image.sh --out a.png <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  # the first line changes the shell parse: a comment, an escaped or unclosed quote, an escaped `<<`,
+  # a substitution spanning the newline — the "body" would become commands
+  'cd # && bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd "x\" && bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+" ; git push
+CODEX_PROMPT_END'
+  'cd "\" && bash .claude/scripts/codex-review.sh run --cwd /x --model m --effort high <<'\''CODEX_PROMPT_END'\''
+" ; git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-review.sh run # <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-review.sh run --cwd "/x <<'\''CODEX_PROMPT_END'\''
+" ; git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-review.sh run --cwd /x \<<'\''CODEX_PROMPT_END'\''
+echo x; git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-review.sh run --cwd $(true <<'\''CODEX_PROMPT_END'\''
+) ; git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-review.sh run --cwd '\''/x'\'' <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-image.sh --out "a.png <<'\''CODEX_PROMPT_END'\''
+" ; git push
+CODEX_PROMPT_END'
   # git push in all forms
   'git push'
   'git push origin main'
@@ -100,6 +154,22 @@ CODEX_PROMPT_END
 echo done'
   'bash .claude/scripts/codex-image.sh --out "assets/hero bg.png" --size 1024x1024 --transparent <<'\''CODEX_PROMPT_END'\''
 Banner: a padlock id_rsa and the lettering git push on a wall
+CODEX_PROMPT_END'
+  # one `cd <path> && ` before a wrapper is tolerated; the body is still not checked
+  'cd "/x/y z" && bash .claude/scripts/codex-review.sh run --cwd "/x/y z" --model m --effort high <<'\''CODEX_PROMPT_END'\''
+See id_rsa and git push in the text
+CODEX_PROMPT_END'
+  'cd /x/y && bash .claude/scripts/codex-review.sh run --cwd /x/y --model m --effort high <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd ~/proj-1.2_x && bash .claude/scripts/codex-review.sh run --cwd ~/proj-1.2_x --model m --effort high --resume-thread abc <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'cd /x && bash .claude/scripts/codex-image.sh --out a.png <<'\''CODEX_PROMPT_END'\''
+git push
+CODEX_PROMPT_END'
+  'bash .claude/scripts/codex-review.sh run --cwd "/x/y z" --model gpt-5.6-sol --effort xhigh --resume-thread 01a0cac9-20ed-7cd1-b44d-ed44638ac417 <<'\''CODEX_PROMPT_END'\''
+git push
 CODEX_PROMPT_END'
   # safe git
   'git status'

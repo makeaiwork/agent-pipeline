@@ -37,9 +37,20 @@ fi
 # text to a read-only Codex; the marker is quoted — the shell neither executes nor expands the body.
 # Only the body (between the markers) is removed from the check; the command itself and everything after
 # the closing marker are checked as usual. The condition is narrow: the first line is exactly a wrapper
-# call (no `;`, `&&`, `|` before the marker), otherwise the exception does not apply.
+# call (no `;`, `&&`, `|` before the marker), otherwise the exception does not apply. The one
+# allowance: exactly one `cd <path> && ` may precede the wrapper; the path itself stays under the
+# protected-files check, because only the heredoc body is cut out of the line.
+# Everything before the marker — the `cd` path and the wrapper arguments — is bare words or balanced
+# double-quoted strings only; both inside and outside the quotes `\`, `$`, backticks, `'`, `#` and
+# `;&|<>` are forbidden: any of them changes how the shell parses the first line so that the "heredoc
+# body" becomes commands (`cd # &&`, `cd "\" &&`, `--cwd "/x <<`, `\<<`, `$(true <<`) — then the
+# exception does not apply.
 HEREDOC_OPEN="<<'CODEX_PROMPT_END'"
-if printf '%s\n' "$TOOL_INPUT" | head -1 | grep -qE "^bash \.claude/scripts/(codex-review\.sh run|codex-image\.sh) [^;&|]*${HEREDOC_OPEN}\$"; then
+QUOTED='"[^"\$`;&|<>#]*"'
+WORD='[^"'"'"'\$`;&|<>#[:space:]]+'
+ARGS='('"$QUOTED"'|[^"'"'"'\$`;&|<>#])*'
+CD_PREFIX='(cd ('"$QUOTED"'|'"$WORD"') && )?'
+if printf '%s\n' "$TOOL_INPUT" | head -1 | grep -qE "^${CD_PREFIX}bash \.claude/scripts/(codex-review\.sh run|codex-image\.sh) ${ARGS}${HEREDOC_OPEN}\$"; then
   TOOL_INPUT=$(printf '%s\n' "$TOOL_INPUT" | awk -v open="$HEREDOC_OPEN" '
     BEGIN { skip = 0 }
     skip == 0 && length($0) >= length(open) && substr($0, length($0) - length(open) + 1) == open { print; skip = 1; next }
