@@ -14,6 +14,9 @@ cleanup() { [ -d "$TMP" ] && find "$TMP" -depth -delete 2>/dev/null; }
 trap cleanup EXIT
 
 PASS=0; FAIL=0
+# The owner's real Codex catalog must not leak into the matrix: by default the catalog is absent (no MODEL_WARN);
+# section 34 points CODEX_MODELS_CACHE at fixture catalogs.
+export CODEX_MODELS_CACHE="$TMP/no-catalog.json"
 
 # A copy of the script "after init": the CRITICAL_GLOBS array is replaced as a whole (globs — one line inside the array).
 # The CODEX_* constants and REVIEW_BACKEND are pinned too: the matrix checks the logic, not the owner's choice in the interview.
@@ -24,7 +27,7 @@ make_variant() { # <out> <profile> <globs-line> [backend]
     skip { next }
     /^REVIEW_PROFILE=/ { print "REVIEW_PROFILE=\"" prof "\""; next }
     /^REVIEW_BACKEND=/ { print "REVIEW_BACKEND=\"" backend "\""; next }
-    /^CODEX_MODEL=/ { print "CODEX_MODEL=\"gpt-5.6-sol\""; next }
+    /^CODEX_MODEL=/ { print "CODEX_MODEL=\"gpt-6-sol\""; next }
     /^CODEX_EFFORT_R12=/ { print "CODEX_EFFORT_R12=\"high\""; next }
     /^CODEX_EFFORT_R3=/ { print "CODEX_EFFORT_R3=\"xhigh\""; next }
     { print }
@@ -204,7 +207,7 @@ fresh_repo; add_lines .claude/agents/x.md 1; expect "base globs: .claude critica
 
 # 29. CODEX_MODEL and ROUND1 are printed; on R0 the model is none
 fresh_repo; add_lines server/auth.ts 1
-check "CODEX_MODEL on R3" "$(field "$SCRIPT" CODEX_MODEL)" "gpt-5.6-sol"
+check "CODEX_MODEL on R3" "$(field "$SCRIPT" CODEX_MODEL)" "gpt-6-sol"
 check "ROUND1 on R3" "$(field "$SCRIPT" ROUND1)" "double"
 check "PROFILE printed" "$(field "$SCRIPT" PROFILE)" "standard"
 fresh_repo; add_lines server/x.ts 2
@@ -254,6 +257,46 @@ printf -- '- [ ] **META-1. Summary.** [review: R0] see **AUTH-3. Login.**\n- [ ]
 out=$(bash "$SCRIPT" --task-id AUTH-3); check "anchored task line: own marker R3" "$(printf '%s\n' "$out" | sed -n 's/^TIER=//p')" "R3"
 printf -- '- [ ] **META-1. Summary.** [review: R0] see **AUTH-3. Login.**\n- [ ] **AUTH-3. Login.** text\n' > todo.md
 out=$(bash "$SCRIPT" --task-id AUTH-3); check "anchored task line: no foreign marker" "$(printf '%s\n' "$out" | sed -n 's/^TIER=//p')" "R3"
+
+# 34. MODEL_WARN — CODEX_MODEL against the Codex catalog (the pinned variants use gpt-6-sol, effort high/xhigh)
+lv='[{"effort":"low"},{"effort":"medium"},{"effort":"high"},{"effort":"xhigh"}]'
+catalog() { # <file> <models-json-array>
+  printf '{"fetched_at":"2026-09-23T12:00:00Z","models":%s}\n' "$2" > "$1"
+}
+catalog "$TMP/cat-ok.json" "[{\"slug\":\"gpt-6-sol\",\"description\":\"Workhorse model for coding.\",\"upgrade\":null,\"supported_reasoning_levels\":$lv}]"
+catalog "$TMP/cat-older.json" "[{\"slug\":\"gpt-6-sol\",\"description\":\"Older coding model.\",\"upgrade\":null,\"supported_reasoning_levels\":$lv}]"
+catalog "$TMP/cat-retire.json" "[{\"slug\":\"gpt-6-sol\",\"description\":\"Coding model.\",\"upgrade\":{\"model\":\"gpt-7-sol\",\"retirement_at\":\"2026-12-01T19:00:00Z\"},\"supported_reasoning_levels\":$lv}]"
+catalog "$TMP/cat-missing.json" '[{"slug":"gpt-6-astra","description":"Frontier.","upgrade":null}]'
+catalog "$TMP/cat-effort.json" '[{"slug":"gpt-6-sol","description":"Coding model.","upgrade":null,"supported_reasoning_levels":[{"effort":"low"},{"effort":"high"}]}]'
+catalog "$TMP/cat-nolevels.json" '[{"slug":"gpt-6-sol","description":"Coding model.","upgrade":null}]'
+printf '{"unexpected":true}\n' > "$TMP/cat-shape.json"
+printf 'not json\n' > "$TMP/cat-broken.json"
+mw() { CODEX_MODELS_CACHE="$1" bash "$2" | sed -n 's/^MODEL_WARN=//p'; } # <catalog> <script>
+fresh_repo; add_lines server/auth.ts 1   # R3: effort xhigh
+check "model_warn: current model — silent" "$(mw "$TMP/cat-ok.json" "$SCRIPT")" ""
+case "$(mw "$TMP/cat-older.json" "$SCRIPT")" in *'marked "Older coding model."'*) PASS=$((PASS+1)) ;; *) FAIL=$((FAIL+1)); echo "FAIL: model_warn: older" ;; esac
+case "$(mw "$TMP/cat-retire.json" "$SCRIPT")" in *"retires 2026-12-01; successor gpt-7-sol"*) PASS=$((PASS+1)) ;; *) FAIL=$((FAIL+1)); echo "FAIL: model_warn: retiring" ;; esac
+case "$(mw "$TMP/cat-missing.json" "$SCRIPT")" in *"not in the Codex catalog (fetched 2026-09-23"*) PASS=$((PASS+1)) ;; *) FAIL=$((FAIL+1)); echo "FAIL: model_warn: missing" ;; esac
+case "$(mw "$TMP/cat-effort.json" "$SCRIPT")" in *"does not support effort xhigh"*) PASS=$((PASS+1)) ;; *) FAIL=$((FAIL+1)); echo "FAIL: model_warn: effort" ;; esac
+check "model_warn: no levels listed — silent" "$(mw "$TMP/cat-nolevels.json" "$SCRIPT")" ""
+check "model_warn: unexpected catalog shape — silent" "$(mw "$TMP/cat-shape.json" "$SCRIPT")" ""
+check "model_warn: broken catalog — silent" "$(mw "$TMP/cat-broken.json" "$SCRIPT")" ""
+check "model_warn: no catalog — silent" "$(mw "$TMP/absent.json" "$SCRIPT")" ""
+# the catalog written by an older Codex client than the `codex` on PATH (the one the plugin runs) — "missing" is not a signal
+mkdir -p "$TMP/bin"; printf '#!/bin/sh\necho "codex-cli 0.156.1"\n' > "$TMP/bin/codex"; chmod +x "$TMP/bin/codex"
+printf '{"fetched_at":"2026-09-23T12:00:00Z","client_version":"0.154.0","models":[{"slug":"gpt-6-astra"}]}\n' > "$TMP/cat-oldclient.json"
+printf '{"fetched_at":"2026-09-23T12:00:00Z","client_version":"0.156.1","models":[{"slug":"gpt-6-astra"}]}\n' > "$TMP/cat-sameclient.json"
+check "model_warn: missing in an older client's catalog — silent" "$(CODEX_MODELS_CACHE="$TMP/cat-oldclient.json" PATH="$TMP/bin:$PATH" bash "$SCRIPT" | sed -n 's/^MODEL_WARN=//p')" ""
+case "$(CODEX_MODELS_CACHE="$TMP/cat-sameclient.json" PATH="$TMP/bin:$PATH" bash "$SCRIPT" | sed -n 's/^MODEL_WARN=//p')" in *"not in the Codex catalog (fetched 2026-09-23 by codex 0.156.1"*) PASS=$((PASS+1)) ;; *) FAIL=$((FAIL+1)); echo "FAIL: model_warn: missing in the same client's catalog" ;; esac
+out=$(CODEX_MODELS_CACHE="$TMP/cat-older.json" bash "$SCRIPT"); rc=$?
+check "model_warn: exit code stays 0" "$rc" "0"
+check "model_warn: tier unaffected" "$(printf '%s\n' "$out" | sed -n 's/^TIER=//p')" "R3"
+fresh_repo; add_lines server/x.ts 2      # R1: effort high — supported by cat-effort
+check "model_warn: supported effort on R1 — silent" "$(mw "$TMP/cat-effort.json" "$SCRIPT")" ""
+fresh_repo; add_lines todo.md 1          # R0: Codex is not called — no check
+check "model_warn: R0 — silent" "$(mw "$TMP/cat-older.json" "$SCRIPT")" ""
+fresh_repo; add_lines server/auth.ts 1   # backend claude: CODEX=none — no check
+check "model_warn: backend claude — silent" "$(mw "$TMP/cat-older.json" "$ONLYCL")" ""
 
 echo "review-tier: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Code review of the task's diff before the commit — the second, independent reader in a double review (R3; in the strict profile R2 as well — in parallel with @codex-reviewer) and the replacement for Codex when it is UNAVAILABLE on any tier. Checks the project's domain invariants, security, logic, style. The report format is shared with Codex.
-model: fable
+model: opus
 tools: Read, Glob, Grep, Bash(grep *), Bash(rg *), Bash(git diff *), Bash(git log *), Bash(git status), Bash(git show *)
 disallowedTools:
   - Edit

@@ -62,7 +62,10 @@ Collect and show the owner ONE "found → proposed" table before any questions:
 8. **Owner's environment**: `command -v codex python3 jq node`; the Codex plugin, Codex CLI, the
    `image_generation` feature, MCP `rembg` — with the detection commands of `tools.md` §2 (the last
    two — only with UI from item 7); `~/.codex/config.toml` (`model`, `model_reasoning_effort`), the
-   catalog `~/.codex/models_cache.json`; `pwd` contains `Dropbox`.
+   catalog `~/.codex/models_cache.json`; `pwd` contains `Dropbox`. **Model freshness** per
+   `knobs.md` E: the Codex catalog and the plugin's effort set (§2, local) and the Claude snapshot
+   against Anthropic's official pages (§3, network) → a "Models" row in the table: "configured →
+   status (current / flagged: why / snapshot stale) → proposed".
 9. **Signs of parallel agent sessions** (`AGENT_ID`, several DBs in compose) and of an external
    tracker (Jira keys in commits) — they enable the optional questions of `knobs.md` B.
 
@@ -90,15 +93,18 @@ Five questions `knobs.md` A1–A5, one at a time, each strictly in this format:
 Order and content:
 
 - **A1 critical paths** → `CRITICAL_GLOBS`.
-- **A2 review models** — the review backend (Codex + Claude reader / Codex + Opus / Claude only /
-  Codex only), then the Codex model and effort (`CODEX_MODEL`, `CODEX_EFFORT_R12`, `CODEX_EFFORT_R3`;
-  the catalog from reconnaissance, the owner's current choice from `config.toml` — recommend it by
-  default), the model of `reviewer` and `review-consolidator`.
+- **A2 review models** — the review backend (Codex + Claude reader / Codex + Fable reader / Claude
+  only / Codex only), then the Codex model and effort (`CODEX_MODEL`, `CODEX_EFFORT_R12`,
+  `CODEX_EFFORT_R3`; the catalog from reconnaissance; the owner's current choice from `config.toml`
+  is recommended unless `knobs.md` E flags it), the model of `reviewer` and `review-consolidator`.
 - **A3 strictness profile** — `standard` / `strict` / `light` → `REVIEW_PROFILE`.
 - **A4 executor models and effort** — `task-runner`, `coder`, `architect`, `researcher`,
-  `tester`; `effortLevel` globally and per-role `effort:` only when non-default. One screen with
-  4 options: "default (Fable for runner/coder/architect, high)" / "coder on Opus" / "everything on
-  Opus" / "default + `max` for reviewer/architect" — plus Other.
+  `tester`; `effortLevel` globally and per-role `effort:` only when non-default; the fallback
+  family (`{{FALLBACK_MODEL}}`). One screen with 4 options: "default (Opus for
+  runner/coder/architect/reviewer, high; fallback Fable)" / "Fable for architect and reviewer" /
+  "everything on Fable (fallback Opus)" / "default + `xhigh`/`max` for reviewer/architect" — plus
+  Other. The family names follow the `knobs.md` E leader rule: when the snapshot is stale, the
+  screen is built from the current leader.
 - **A5 docs and UI** — `committer` triggers, design guide, canonical docs, one line about the
   project.
 
@@ -131,7 +137,8 @@ From `SKILL_DIR/templates/` into the target repo, substitutions — per the phas
   (`{{DOMAIN_CHECKLIST}}`, `{{UI_CHECKLIST}}`, `{{DOC_TRIGGERS}}`) — as ready text; `_QUOTED` —
   the same lines with the prefix `> `; empty value — remove the placeholder line and the empty line
   after it.
-- `.claude/settings.json`: `__STACK_ALLOW__` → the stack's allow lines; `__ASSET_ALLOW__` →
+- `.claude/settings.json`: `__STACK_ALLOW__` → the stack's allow lines; `__FALLBACK_MODEL__` → the
+  fallback family from A4; `__ASSET_ALLOW__` →
   `mcp__rembg__*` lines when `rembg` is in the "Assets" knob, otherwise the line is removed; **if the
   file already exists — merge with a `python3` script (not `jq '*'`: it overwrites scalars and
   arrays with the right-hand document)**:
@@ -186,7 +193,11 @@ agent pipeline (agent-pipeline init)`), a restart of the Claude Code session (ho
    read at startup).
 4. The first run — `verify.md` §8: `/do-next SMOKE-1` and what to check.
 5. Where to tune things later: the Codex profile and model — `review-tier.sh`; role models —
-   frontmatter; revisiting the profile — by `found=`/`codex=` in `.claude/state/runs.log`.
+   frontmatter, the fallback — `fallbackModel` + `{{FALLBACK_MODEL}}` lines; revisiting the profile
+   and the new models — by `found=`/`rounds=`/`codex=` in `.claude/state/runs.log`; an aged Codex
+   model shows up as `MODEL_WARN` in the runner's report, an aged Claude choice — in
+   `/agent-pipeline audit`. A stale `knobs.md` E snapshot → a line "update `knobs.md` E in the skill
+   repository".
 
 ## upgrade — update a deployed or foreign pipeline
 
@@ -320,6 +331,7 @@ present / absent / differs → `principles.md` section". Items:
 | 14  | Deliberate divergences (a task board instead of `todo.md` lines, task tiers, a value filter, telemetry in the repo, a context checkpoint, port slots)            | mark "deliberately absent", not as a defect (`principles.md` §10)                 |
 | 15  | Instruction files: `CLAUDE.md` imports `@AGENTS.md` (or is a symlink to it) — otherwise Claude Code does not see `AGENTS.md`: it is read natively since 2.1.277 and only without a `CLAUDE.md`; shared rules — in `AGENTS.md` (Codex reads the same file from cwd), in `CLAUDE.md` — only Claude specifics, no duplicates; the section marker — one per file; prompts do not require a separate Read of `AGENTS.md`; a nested `AGENTS.md` next to a `CLAUDE.md` without an import, `AGENTS.override.md`, `AGENTS.local.md`, `.agents/` — Claude does not read them; the `AGENTS.md` chain from the root to cwd ≤ 32 KiB (the Codex limit `project_doc_max_bytes`: beyond it the rules silently do not reach the reviewer); `pluginConfigs."agents-md@builtin"` in the project `settings.json` — a dead setting (it works only in user/managed) | `grep -cE '^@(\./)?AGENTS\.md' CLAUDE.md`, `test -L CLAUDE.md`, `grep -c 'agent-pipeline:begin' CLAUDE.md AGENTS.md`, `git ls-files '*AGENTS*.md' '*CLAUDE.md' .agents`, `wc -c AGENTS.md`, `jq .pluginConfigs .claude/settings.json`, `grep -rniE 'read .AGENTS|прочитай .AGENTS' .claude/` (`principles.md` §6) |
 | 16  | The owner's tools against what the config expects: `REVIEW_BACKEND≠claude` → the `codex@openai-codex` plugin, Codex CLI, login; `codex-image.sh` in the `tools:` of `coder` → `image_generation`; `mcp__rembg__*` in `tools:`/`allow` → MCP `rembg`. "Differs" — only when the config expects something absent; an extra installed tool is not a defect | the detection of `tools.md` §2, `bash .claude/scripts/codex-review.sh check`; into the report — the installation commands, audit itself installs nothing |
+| 17  | Model freshness (`knobs.md` E): `CODEX_MODEL`/`CODEX_EFFORT_*` of `review-tier.sh` against the Codex catalog and the plugin's effort set; `model:` of runner/coder/architect/reviewer against the leader rule, and the owner's Claude Code versions against the one the alias needs (`opus` = Opus 5.5 from 2.1.280); `fallbackModel` ≠ the runner's model and matches the fallback in the prompts. "Differs" — a flagged model or effort, a non-leader family without a recorded reason, fallback = primary | `knobs.md` E §2 commands; `claude --version`; `bash .claude/scripts/review-tier.sh` (a `MODEL_WARN=` line); `grep -n '^model:' .claude/agents/*.md`; `jq .fallbackModel .claude/settings.json`; `grep -rn 'model: "' .claude/agents/task-runner.md .claude/skills/do-all/SKILL.md` |
 
 For every "absent/differs" — one line: what, where, which `principles.md` section it refers
 to, what to change (no edits — report only). At the end — the three most costly divergences and

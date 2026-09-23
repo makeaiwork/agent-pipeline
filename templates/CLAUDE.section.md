@@ -32,7 +32,9 @@ in the fields `ROUND1` (`none|single|double`), `ROUND2` (`none|light|escalate|do
 `CONSOLIDATOR` — agents follow them, not a table from memory; `double` = `reviewer` ‖
 `codex-reviewer` in one message, they do not see each other. Round 2 — only on confirmed S1/S2,
 Codex in `mode: verify` on the same thread (`threadId`), the verdict is binary `APPROVE`/`BLOCKED`,
-there is no third pass. Codex `UNAVAILABLE` or `CODEX=none` — `reviewer` takes its place. The marker `[review: Rn]` in the task line overrides the tier. Fate of findings: a task is
+there is no third pass. Codex `UNAVAILABLE` or `CODEX=none` — `reviewer` takes its place. `MODEL_WARN=` (the Codex
+catalog marks the model as missing, retiring or older) goes to the owner in the runner's report; the
+model is changed only in `review-tier.sh`. The marker `[review: Rn]` in the task line overrides the tier. Fate of findings: a task is
 spawned only by a confirmed S1/S2; S3/S4 — fix-in-place, an item in `CHORES-<block>` or won't
 fix; subtasks from review — with `⏸️` until the owner's triage.
 
@@ -43,10 +45,10 @@ Codex is called through the Claude Code plugin `codex@openai-codex` (the `codex`
 ### Model fallback
 
 A call to `task-runner`/`coder`/`reviewer`/`architect` that failed with a model error (limit,
-credits, `overloaded`, 429/402/529) is retried by the caller ONCE with `model: "opus"`; if the retry
-fails too — stop and report to the owner. `fallbackModel: ["opus"]` in `settings.json` only covers
-overload and 5xx. The emergency switch for a session — `CLAUDE_CODE_SUBAGENT_MODEL=opus` in the
-launch environment.
+credits, `overloaded`, 429/402/529) is retried by the caller ONCE with `model: "{{FALLBACK_MODEL}}"`; if
+the retry fails too — stop and report to the owner. `fallbackModel: ["{{FALLBACK_MODEL}}"]` in
+`settings.json` only covers overload and 5xx. The emergency switch for a session —
+`CLAUDE_CODE_SUBAGENT_MODEL={{FALLBACK_MODEL}}` in the launch environment.
 
 ### Manual mode: `[MANUAL]` and `[OWNER]`
 

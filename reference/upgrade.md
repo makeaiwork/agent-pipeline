@@ -54,6 +54,7 @@ state files; untracked files in these paths are a reason to stop under the clean
 | `CRITICAL_GLOBS`, `REVIEW_PROFILE`, `REVIEW_BACKEND`, `CODEX_MODEL`, `CODEX_EFFORT_*`, thresholds | the PROJECT block of `review-tier.sh` | the `knobs.md` A1/A3 rules from reconnaissance; plus the paths that the old agents call critical ("security", "safety", "payments", "auth") |
 | `PROTECTED_FILES`, secret patterns | the PROJECT block of `safety-check.sh` | `grep -nE 'secret\|token\|key\|BLOCK\|pattern' .claude/hooks/*.sh` — show the lines to the owner |
 | `model:`, `effort:` of the roles | the frontmatter of the agents of the same name | the same; for roles the repo does not have (`task-runner`, `codex-reviewer`, `review-consolidator`) — the `knobs.md` A4 default |
+| `fallbackModel`, `{{FALLBACK_MODEL}}` | `settings.json` → `fallbackModel`; the `model: "…"` of the "Model fallback" rule in `task-runner.md` | the same; a fallback equal to the runner's own model (the old default `opus` next to an `opus` runner) is flagged — `knobs.md` A4 |
 | `{{DOC_TRIGGERS}}`, `{{CANON_DOCS}}` | `committer.md`, the triggers section | the documentation section of the old `committer.md`; `CANON_DOCS` — init reconnaissance item 5 |
 | `{{DOMAIN_CHECKLIST}}`, `{{UI_CHECKLIST}}` | `reviewer.md` `### Domain` / `### UI` | any section of the old `reviewer.md` with "domain", "security", "invariant", "UI" in the heading |
 | `{{DEV_SERVER_RULE}}`, `{{SYMLINK_CMDS}}`, `{{FORMAT_CMD}}` | `task-runner.md`, the PROJECT block of `post-edit.sh` | init reconnaissance item 2; the old `post-edit.sh` — into §5 |
@@ -65,7 +66,12 @@ state files; untracked files in these paths are a reason to stop under the clean
 Rule: in the interview "**Recommended for this project: <current> — because that is what is set now
 in `<file>:<line>`**". The current value contradicts a `knobs.md` rule (for example, `light` with
 money in A1 or `sonnet` for `coder` on domain logic) → recommend per `knobs.md`, give the current
-value as the second option labelled "current". A value that is neither in the files nor given by a
+value as the second option labelled "current". The same for models: a current `CODEX_MODEL`,
+`CODEX_EFFORT_*` or role `model:` that `knobs.md` E flags (a missing, retiring or "Older" Codex
+model, an effort the plugin rejects, a Claude family that is no longer the leader, a fallback equal
+to the primary) is not recommended just because it is set now — recommend by the E leader rule and
+give the current value as "current", with the reason from E ("`gpt-5.6-sol` is marked Older in the
+catalog fetched <date>"). A value that is neither in the files nor given by a
 rule — the `knobs.md` C default, without a question.
 
 ## 3. U questions (upgrade only; each one only under its own condition)

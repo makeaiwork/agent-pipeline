@@ -57,12 +57,13 @@ The `strict` and `light` profiles shift this scale up or down. Round 2 happens o
 
 - **A mandatory interview instead of defaults.** Five questions (critical paths, who reviews, strictness, executor models, docs and UI), each with pros and cons for every option and a recommendation for your project based on what reconnaissance found.
 - **Codex as the primary reviewer** via the [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) plugin: review runs on your ChatGPT subscription and does not consume your Claude limit. If Codex is unavailable, the Claude reviewer takes its role in the same mode — the pipeline does not stop.
+- **Models that do not go stale.** Defaults (today: Claude Opus 5.5 for the executors and the Claude reviewer, Fable as the fallback, Codex `gpt-6-sol` at `high`, `xhigh` on critical paths) are re-checked on every `init`/`upgrade`/`audit` against your local Codex catalog and Anthropic's official pages; the deployed pipeline prints `MODEL_WARN` when Codex marks the review model as older or retiring.
 - **Tool installation by consent.** If the Codex plugin, the Codex CLI or rembg is missing, the skill shows the exact commands, asks, and installs only what you tick. Nothing is ever installed silently.
 - **Assets for UI projects** (optional): image generation through the Codex CLI with the `codex-image.sh` wrapper, and background removal through the [rembg](https://github.com/croef/rembg-mcp) MCP server.
 - **`AGENTS.md` as the shared source of rules.** `CLAUDE.md` imports it with an `@AGENTS.md` line and Codex reads it natively — project rules live in one place for every agent.
 - **Speaks your language.** Everything ships in English. The skill talks to you in the language you write in, and detects the language of your repository (docs, state files, commit messages) to write the generated prompts and sections in it — it asks only when the signals disagree.
 - **`upgrade` mode** updates an already deployed or hand-built `.claude/**`: a legacy copy is made before any write, project-specific blocks are carried over, and no file of yours without a template counterpart is touched.
-- **`audit` mode** — 16 checks against the principles, report only.
+- **`audit` mode** — 17 checks against the principles, report only.
 - **Safety hooks**: blocking of `git push`, `reset --hard`, `rm -rf`, and reads of `.env*` and key files; a ban on background pipeline agents; a context snapshot before compaction.
 - **Everything is tested**: seven test matrices for hooks and scripts, which also run inside your repository after installation.
 

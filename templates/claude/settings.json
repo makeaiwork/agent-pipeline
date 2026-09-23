@@ -67,7 +67,7 @@
   "effortLevel": "high",
   "autoCompactWindow": 400000,
   "fallbackModel": [
-    "opus"
+    "__FALLBACK_MODEL__"
   ],
   "worktree": {
     "baseRef": "head"

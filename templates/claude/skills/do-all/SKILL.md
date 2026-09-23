@@ -78,7 +78,7 @@ report to the user (the `ACTIVE …` lines from the output) and wait for a decis
 ## Model fallback
 
 A call to `@task-runner` failed with a model error (`usage limit`, `rate limit`, credits,
-`model … unavailable`, `overloaded`, codes 429/402/529) — repeat it ONCE with `model: "opus"`,
+`model … unavailable`, `overloaded`, codes 429/402/529) — repeat it ONCE with `model: "{{FALLBACK_MODEL}}"`,
 everything else in the call unchanged (ID, full task text, `isolation: "worktree"`). Before the
 retry run `git worktree list`: if there is a worktree with a non-empty
 `git -C <path> status --porcelain` or a `worktree-*` branch with commits
@@ -86,8 +86,8 @@ retry run `git worktree list`: if there is a worktree with a non-empty
 goes into the summary as `FAILED (model limit)`, the path and the branch — to the owner. The retry
 failed too — stop and report; substituting yourself for the runner is not allowed. A
 `FAILED`/`BLOCKED` report from the runner, a tool timeout and an error inside the task do not count
-as a fallback. The emergency switch for the whole session — `CLAUDE_CODE_SUBAGENT_MODEL=opus` in the
-launch environment.
+as a fallback. The emergency switch for the whole session — `CLAUDE_CODE_SUBAGENT_MODEL={{FALLBACK_MODEL}}`
+in the launch environment.
 
 ## Loop for EVERY open task in scope
 
@@ -140,7 +140,8 @@ When the scope is exhausted (or no `[ ]` tasks are left) — write the final rep
 - how many `DONE` / `ALREADY_DONE` / `BLOCKED` / `FAILED`, with hashes (for `ALREADY_DONE` and the
   terminal `FAILED` the hash may be `—` — print it exactly so);
 - what needs an owner decision (including `[OWNER]` subtasks created by runners at forks; the fact of
-  a model fallback, if there was one, — in one line with the task ID and the error text);
+  a model fallback, if there was one, — in one line with the task ID and the error text; a
+  `MODEL_WARN` from the runners' reports — once, even if several tasks repeated it);
 - "waiting for you at the computer" — skipped `[MANUAL]` tasks (ID and title); "owner actions" —
   skipped `[OWNER]` tasks; in a separate "for triage" section — tasks with `⏸️`, including subtasks
   that runners created from review findings in this run (their fate — let through / into CHORES /

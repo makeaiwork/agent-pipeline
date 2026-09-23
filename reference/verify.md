@@ -28,7 +28,8 @@ Expected: `TIER=R1`, `CODEX=<effort from the interview>` (or `none` in the `ligh
 `CODEX_MODEL=<model>`, `ROUND1=…`, `ROUND2=…`, `CONSOLIDATOR=…`, `PROFILE=<profile>`. Until
 `.claude/**` is committed, the script sees it in the diff and prints `WARN=marker lowered tier…` —
 this is expected and in itself confirms that `.claude/*` is critical; after `.claude/**` is
-committed there must be no `WARN` line. Additionally: `grep -n '{{[A-Z_]*}}' .claude/scripts/review-tier.sh` → empty.
+committed there must be no `WARN` line. No `MODEL_WARN=` line either: it means the Codex catalog
+flags the chosen model or effort — go back to A2 (`knobs.md` E). Additionally: `grep -n '{{[A-Z_]*}}' .claude/scripts/review-tier.sh` → empty.
 
 ## 3. Hooks on sample JSON
 
@@ -90,7 +91,8 @@ holds.
 
 ```bash
 grep -rn '{{[A-Z_]*}}' .claude/ .worktreeinclude todo.md claude-progress.md blockers.md CLAUDE.md AGENTS.md   # empty
-grep -rn '__STACK_ALLOW__\|__ASSET_ALLOW__' .claude/settings.json                 # empty
+grep -rn '__STACK_ALLOW__\|__ASSET_ALLOW__\|__FALLBACK_MODEL__' .claude/settings.json   # empty
+jq -r '.fallbackModel[0]' .claude/settings.json; grep -m1 '^model:' .claude/agents/task-runner.md   # different families
 jq -e . .claude/settings.json >/dev/null && echo "settings.json ok"               # the JSON is valid after substitutions
 test -L CLAUDE.md || grep -cE '^@(\./)?AGENTS\.md' CLAUDE.md                      # 1: AGENTS.md reaches Claude via the import (a symlink is ok too)
 grep -c 'agent-pipeline:begin skill=' CLAUDE.md AGENTS.md                         # 1 per file
@@ -108,6 +110,10 @@ Only AFTER `.claude/**`, `.worktreeinclude` and the state files are committed: t
 is taken from HEAD, and without the commit it has neither scripts nor hooks. Then `/do-next SMOKE-1`. Check: the runner's report contains `Worktree:`; the ff-merge went through; `git worktree
 list` shows only the main checkout; `.claude/state/runs.log` got a line with `tier=R1`; the main
 session grew by < 5K tokens (`/context` before and after). The commit `docs: SMOKE-1 — …` is in `git log`.
+The runner ran on the intended model and effort: `grep -ho '"model":"[^"]*"\|"effort":"[^"]*"' <the
+runner's subagent transcript> | sort | uniq -c` shows the model of the chosen family (today
+`claude-opus-5-5`, not `claude-opus-5`: an older Claude Code resolves `opus` to Opus 5, `knobs.md` E)
+and `"effort":"high"`.
 After that `SMOKE-1` and `CHORES-SMOKE` can be deleted from `todo.md` or left as a sample.
 
 ## 9. Additionally after upgrade

@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Plans refactoring and architectural decisions. Use before large changes — analyzes dependencies, designs interfaces, creates a step-by-step implementation plan. Read-only.
-model: fable
+model: opus
 tools: Read, Glob, Grep, Bash(grep *), Bash(rg *), Bash(find *), Bash(wc *), Bash(ls *), Bash(cat package.json), Bash(cat tsconfig.json), Bash(git log *), Bash(git diff *)
 disallowedTools:
   - Edit

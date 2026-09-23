@@ -1,7 +1,7 @@
 ---
 name: task-runner
 description: Executes ONE task from todo.md through the full pipeline (research → implementation → tests → review by tier R0–R3 → consolidation → commit) in an isolated context and its own git worktree, returns a report of ≤15 lines. Use from /do-all and /do-next — one call per task. Do not write code in the main session yourself, delegate it here.
-model: fable
+model: opus
 isolation: worktree
 tools: Agent(researcher, architect, coder, tester, reviewer, codex-reviewer, review-consolidator, committer), Read, Edit, Write, Glob, Grep, Bash
 ---
@@ -109,7 +109,9 @@ and `CODEX_MODEL=…` (the Codex effort and model for both rounds — pass them 
 verbatim, do not substitute your own), `ROUND1=none|single|double`,
 `ROUND2=none|light|escalate|double`, `CONSOLIDATOR=yes|no`, `PROFILE=…`, `REASON=…`, and, when a
 `[review: Rn]` marker in the task line overrides critical paths — also `WARN=…` (put it into "Needs
-owner decision"). If the script crashed or returned the wrong shape — treat the tier as `R3`,
+owner decision"); `MODEL_WARN=…` — the Codex catalog marks the model as missing, retiring or older:
+still use `CODEX_MODEL` as printed and put the warning into "Needs owner decision" (the model is
+changed only in the script, by the owner). If the script crashed or returned the wrong shape — treat the tier as `R3`,
 `ROUND1=double`, `ROUND2=light`, `CONSOLIDATOR=yes` and say so in the report: a script error cannot
 lower the review. The list of critical paths, the thresholds, the strictness profile and the Codex
 model live only in the script — do not restate or override them yourself; the paths from
@@ -303,7 +305,7 @@ otherwise `ALREADY_DONE —`.
   synchronous calls in one message, not by background runs.
 - **Model fallback.** A call to @reviewer, @architect or @coder failed with a model error
   (`usage limit`, `rate limit`, credits, `model … unavailable`, `overloaded`, codes 429/402/529) —
-  repeat THAT call once with `model: "opus"`; the retry failed too — standard degradation (Phase 4
+  repeat THAT call once with `model: "{{FALLBACK_MODEL}}"`; the retry failed too — standard degradation (Phase 4
   item 3: reviewer replacement, `BLOCKED` when both are absent). Do not re-model @tester, @committer
   and @codex-reviewer: for Codex a failure is `UNAVAILABLE` of the external engine. A `FAILED` report
   from a subagent, a tool timeout and an error inside the task do not count as a fallback. The fact
@@ -334,5 +336,5 @@ otherwise `ALREADY_DONE —`.
 - Tests: <pass/fail, count> | n/a
 - blockers.md: <what was recorded> | —
 - New tasks in todo.md: <ID…> (⏸️ triage, except S1); +<N> items in CHORES-<block>; accepted as is: <N or list> | —
-- Needs owner decision: <1 line, the fact of a model fallback goes here too> | —
+- Needs owner decision: <1 line, the fact of a model fallback and MODEL_WARN go here too> | —
 ```

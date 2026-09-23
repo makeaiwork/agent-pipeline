@@ -29,13 +29,13 @@ prompts lowers quality on Fable 5.x and bloats the runner).
 
 | Agent                 | Model (default) | Writes                | Purpose                                                                                                   |
 | --------------------- | --------------- | --------------------- | --------------------------------------------------------------------------------------------------------- |
-| `task-runner`         | fable           | bookkeeping, worktree | phases 0–5 of one task; the only writer of `todo.md`/`claude-progress.md`/`blockers.md`; `Agent(…)` allow |
+| `task-runner`         | opus            | bookkeeping, worktree | phases 0–5 of one task; the only writer of `todo.md`/`claude-progress.md`/`blockers.md`; `Agent(…)` allow |
 | `researcher`          | opus            | —                     | what is here (unknown area, >3 files)                                                                     |
-| `architect`           | fable           | —                     | how to rework it (large tasks, `ARCHITECTURE_REVIEW`)                                                     |
-| `coder`               | fable           | code                  | one atomic implementation                                                                                 |
+| `architect`           | opus            | —                     | how to rework it (large tasks, `ARCHITECTURE_REVIEW`)                                                     |
+| `coder`               | opus            | code                  | one atomic implementation                                                                                 |
 | `tester`              | sonnet          | —                     | test run, diagnostics, visual UI check                                                                    |
 | `codex-reviewer`      | (Codex, plugin) | —                     | main review of round 1, fix verification in round 2 on the same thread                                    |
-| `reviewer`            | fable           | —                     | second independent reader (double review) and replacement for Codex on `UNAVAILABLE`                      |
+| `reviewer`            | opus            | —                     | second independent reader (double review) and replacement for Codex on `UNAVAILABLE`                      |
 | `review-consolidator` | opus            | scratchpad file       | with two reports: checks only the disagreements against the code, issues the routing verdict              |
 | `committer`           | sonnet          | docs, git             | commit by an explicit set of paths + docs by trigger rules; ≤1 commit per runner exit                     |
 
@@ -155,9 +155,19 @@ both groups and lists them in the report.
 - `pre-compact.sh` / `session-start-compact.sh`: a snapshot of the tree and the header before
   compaction and its display afterwards; `autoCompactWindow: 400000` is insurance, not a mechanism
   (on a 1M model the default auto-compact fired at 950K and lost the phase/verdicts).
-- `fallbackModel: ["opus"]` covers only overload and 5xx; for limit/billing (429/402) — the rule
-  "one retry with `model: "opus"`" in the prompts, and the emergency switch
-  `CLAUDE_CODE_SUBAGENT_MODEL=opus` in the environment.
+- `fallbackModel` (the fallback family — the other of `opus`/`fable`, never the runner's own model)
+  covers only overload and 5xx; for limit/billing (429/402) — the rule "one retry with the fallback
+  model" in the prompts, and the emergency switch `CLAUDE_CODE_SUBAGENT_MODEL=<fallback>` in the
+  environment.
+- Models age: agents name families (`opus`/`fable`/`sonnet`), which Claude Code resolves to the
+  newest version, and the Codex model lives in one constant of `review-tier.sh`, which prints
+  `MODEL_WARN=` when the local Codex catalog marks it as missing, retiring or older. Which family
+  leads is re-checked by the skill on every init/upgrade/audit. History: until 2026-09-23 the
+  defaults were `fable` for runner/coder/architect/reviewer with an `opus` fallback and Codex
+  `gpt-5.6-sol` `high`/`xhigh` by tier; on 2026-09-23 they moved to `opus` (Opus 5.5 led Fable 5.1
+  on agentic benchmarks at 40% of the price) with a `fable` fallback, and to Codex `gpt-6-sol`
+  (half the price of `gpt-5.6-sol`), still `high`/`xhigh` by tier — on vendor figures, to be
+  confirmed by `runs.log`.
 - Agent frontmatter: `tools:` is an allow-list; `disallowedTools: Bash(…)` disables Bash entirely;
   `allowedTools` is a dead key.
 - Dropbox: mark `.claude/worktrees` and `.claude/state` with `com.dropbox.ignored`, otherwise the

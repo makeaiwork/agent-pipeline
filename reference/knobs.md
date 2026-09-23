@@ -37,32 +37,40 @@ one model. Guideline: ≤10 globs.
 
 | Option | + | − |
 | --- | --- | --- |
-| **Codex primary + Claude reader on double review** | Codex runs on its own subscription — the Claude limit is not spent; a second independent look where a mistake is expensive | needs the `codex` CLI and the `codex@openai-codex` plugin; two subscriptions |
-| Codex primary + Claude reader on **Opus** | cheaper than Fable, the limit lasts longer; the second source repo has worked this way since 05.09.2026 with no increase in review returns | weaker than Fable on complex domain logic and long diffs |
+| **Codex primary + Claude reader (`opus`) on double review** | Codex runs on its own subscription — the Claude limit is not spent; a second independent look where a mistake is expensive; the reader is the strongest and cheaper Claude family (E) | needs the `codex` CLI and the `codex@openai-codex` plugin; two subscriptions |
+| Codex primary + Claude reader on **Fable** | the reader is a different model from the one that wrote the code (`coder` is on `opus`) — different blind spots | 2.5× the price of Opus, the Fable limit runs out sooner (it did on 2026-08-26); below Opus 5.5 on agentic benchmarks (E) |
 | Claude only (no Codex) | one subscription, nothing to install | one model sees its own blind spots (writer and reviewer are the same family); every review eats the Claude limit |
 | Codex only | minimum of Claude calls | on `R3` there is no second independent reader and no arbiter |
 
 Inside the choice:
 
 - **Codex model** — the catalogue is `~/.codex/models_cache.json`, the owner's current choice is
-  `~/.codex/config.toml` (`model =`). Known ones: `gpt-6-astra` (newer; in the second source repo
-  since 05.09.2026, flat `high`), `gpt-5.6-sol` (in the first, `high`/`xhigh` by tier, half a year
-  of runs). Recommendation: whatever
-  is set in the owner's `config.toml` — the owner has already chosen; if it is the default there
-  and the project handles money — `gpt-5.6-sol` with `xhigh` on R3 (a proven combination).
-- **Codex effort** (`CODEX_EFFORT_R12` / `CODEX_EFFORT_R3`): `high`/`xhigh` (default) · flat
-  `high` (the second repo; cheaper, no margin on R3) · `xhigh` (expensive, for money and legal
-  matters). The `codex@openai-codex` plugin does not accept `max`/`ultra` (the set is
-  `none|minimal|low|medium|high|xhigh`); `ultra` is also unsuitable by design: it delegates subtasks
-  on its own, so review time becomes unpredictable.
-- **Claude reviewer model** (`reviewer.md` → `model:`): `fable` (default with money/legal/access)
-  / `opus` (everything else). **Consolidator** (`review-consolidator.md`): `opus` (default; it reads
-  two reports and spot-checks code — Fable's depth is not needed) / `sonnet` (pet project).
+  `~/.codex/config.toml` (`model =`); both are checked for freshness per section E. Options:
+  `gpt-6-sol` (default: the catalogue's coding workhorse, half the price of `gpt-5.6-sol`) ·
+  `gpt-6-astra` (frontier; more Codex quota per review; in the second source repo since 05.09.2026,
+  flat `high`) · `gpt-5.6-sol` (older; half a year of runs in the first repo, `high`/`xhigh` by
+  tier) · whatever else the catalogue lists. Recommendation: the owner's `config.toml` model, unless
+  section E flags it (missing, retiring, "Older"/"Legacy"); flagged → the current coding model by
+  the E leader rule (today `gpt-6-sol`), the owner's value as the second option labelled "current".
+  The recommended model must be in the catalogue at reconnaissance time — a rollout may not have
+  reached this account yet.
+- **Codex effort** (`CODEX_EFFORT_R12` / `CODEX_EFFORT_R3`): `high`/`xhigh` by tier (default; the
+  first repo's scheme: the depth goes where a mistake is expensive, small tasks stay fast) · flat
+  `xhigh` (on `gpt-6-sol`, half the price of `gpt-5.6-sol`, it costs about what `high`/`xhigh` did;
+  − every R1 review takes longer) · flat `high` (the second repo; cheapest, no margin on R3). The
+  `codex@openai-codex` plugin 1.0.6 does not accept `max`/`ultra` (the set is
+  `none|minimal|low|medium|high|xhigh`, even where the catalogue lists more; section E re-checks
+  it); `ultra` is also unsuitable by design: it delegates subtasks on its own, so review time
+  becomes unpredictable.
+- **Claude reviewer model** (`reviewer.md` → `model:`): the primary Claude family of section E —
+  `opus` (default) / `fable` (a different model from the coder's; more expensive).
+  **Consolidator** (`review-consolidator.md`): `opus` (default; it reads two reports and
+  spot-checks code) / `sonnet` (pet project).
 
 **Recommendation rule:** the `codex@openai-codex` plugin and the `codex` CLI with a login are
 present (detection — `tools.md` §2; by this question installation by consent has already been
-offered, look at the state after it) → option 1; Claude reviewer `fable` if money/access/data are
-checked in A1, otherwise `opus`. The plugin and CLI are installed but there is no login yet → still
+offered, look at the state after it) → option 1; Claude reviewer — the primary Claude family of
+section E (today `opus`). The plugin and CLI are installed but there is no login yet → still
 option 1 with an `[OWNER]` item "`codex login`": until login the wrapper returns `UNAVAILABLE`, and
 `reviewer` takes the Codex role. The owner declined the installation or it failed → "Claude only"
 (`REVIEW_BACKEND=claude`: the script prints `CODEX=none`, `reviewer` takes all Codex slots, there is
@@ -94,15 +102,16 @@ it is not called).
 
 | Role | Model options | + / − | Default |
 | --- | --- | --- | --- |
-| `task-runner` | `fable` / `opus` | Fable: holds 5 phases and the merging of reviews without losing the thread; − the Fable limit — the run will stall (the fallback is one retry on Opus). Opus: cheaper, weaker at merging | `fable` |
-| `coder` | `fable` / `opus` | Fable: fewer returns from review on complex logic. Opus: the limit lasts longer; − per the second repo's data, more returns on complex tasks | `fable` |
-| `architect` | `fable` / `opus` | called rarely, cost is not critical; Fable — plan quality | `fable` |
+| `task-runner` | `opus` / `fable` | Opus 5.5: leads Fable 5.1 on long agentic work (Terminal-Bench 4.0 66.4% vs 55.8%) at 40% of the price, the limit lasts longer; − not yet proven in the pipeline (E). Fable: half a year of runs holding 5 phases and the merging of reviews; − the Fable limit ran out on 2026-08-26 and the run stalled | `opus` |
+| `coder` | `opus` / `fable` | Opus 5.5: CursorBench 4.0 57.8% vs 51.8%, cheaper. Fable: a proven record of few review returns on complex logic (the second repo's data was about Opus 5, not 5.5) | `opus` |
+| `architect` | `opus` / `fable` | called rarely, cost is not critical; Opus 5.5 — stronger per E; Fable — a plan from a different model | `opus` |
 | `researcher` | `opus` / `sonnet` | read-only; Opus is enough | `opus` |
 | `tester` | `sonnet` / `opus` | mechanics of a test run; Opus — if the tests are flaky and diagnosis is needed | `sonnet` |
 | `committer` | `sonnet` | mechanics | `sonnet` |
 
 **Effort of Claude roles:** the global `effortLevel` in `settings.json` (`low`/`medium`/`high`)
-applies to the main session and the subagents; default `high`. Per-role — the `effort:` key in the
+applies to the main session and the subagents; default `high`. Keep it explicit: Opus 5.5's own
+default is `medium`, one level below Opus 5's. Per-role — the `effort:` key in the
 agent's frontmatter (`low`/`medium`/`high`/`xhigh`/`max`, availability depends on the model; the key
 is in the list of frontmatter keys of Claude Code 2.1.251, it has not yet been used in live repos —
 after the first init with a non-default, check in the transcript that the subagent's effort
@@ -111,11 +120,14 @@ role. Options: `high` everywhere (default) · `max`/`xhigh` for `reviewer` and `
 longer; for money and legal matters) · `medium` for `tester`/`committer` (faster; we leave the
 default alone — the savings are negligible).
 
-**Recommendation rule:** complex domain logic (calculations, permissions, statuses, multi-step
-forms) → Fable for runner/coder/architect, `high`; CRUD/frontend/docs/scripts → `opus` for `coder`,
-the rest default. `fallbackModel: ["opus"]` always.
+**Recommendation rule:** runner/coder/architect (and the reviewer, A2) — the primary Claude family
+by the section E leader rule (today `opus`), `high`; complex domain logic (calculations,
+permissions, statuses, multi-step forms) → additionally offer `max`/`xhigh` for `reviewer` and
+`architect`. The fallback `{{FALLBACK_MODEL}}` — the other of `opus`/`fable` (today `fable`), never
+the runner's own model.
 
-**Changes:** `model:`/`effort:` in the frontmatter; `effortLevel` in `settings.json`.
+**Changes:** `model:`/`effort:` in the frontmatter; `effortLevel` and `fallbackModel` in
+`settings.json`; `{{FALLBACK_MODEL}}` in `task-runner.md`, `do-all/SKILL.md`, `CLAUDE.section.md`.
 
 ### A5. Docs and UI
 
@@ -156,7 +168,7 @@ that exist and were edited within the last 90 days (`git log --since`).
 | Setting | Default | Where |
 | --- | --- | --- |
 | `autoCompactWindow` | `400000` | `settings.json` |
-| `fallbackModel` | `["opus"]` | `settings.json` |
+| `fallbackModel` | `["__FALLBACK_MODEL__"]` → the fallback family from A4 (today `fable`) | `settings.json` |
 | `MCP_TOOL_TIMEOUT` | `1800000` (30 min; historically — for the Codex MCP, now Codex goes through the plugin and the `codex-review.sh` wrapper enforces the limit; kept for the playwright MCP) | `settings.json` → `env` |
 | `PLAYWRIGHT_MCP_ISOLATED` | `"true"` only with UI + Playwright MCP | `settings.json` → `env` |
 | `__STACK_ALLOW__` | allow list of the stack's commands: `npm/npx/node` · `pnpm` · `yarn` · `python/pip/pytest/uv` · `cargo` · `go` · `make`; from reconnaissance | `settings.json` → `permissions.allow` |
@@ -185,6 +197,7 @@ that exist and were edited within the last 90 days (`git log --since`).
 | `{{DOMAIN_CHECKLIST_QUOTED}}`, `{{UI_CHECKLIST_QUOTED}}` | the same checklists, every line prefixed with `> ` (a quote inside the Codex prompt) | `codex-reviewer.md` |
 | `{{CRITICAL_GLOBS}}` | a marker line in the array; replaced with the items from A1, one per line, in quotes | `review-tier.sh` |
 | `{{REVIEW_PROFILE}}`, `{{CODEX_MODEL}}` | the values from A3/A2 — for the text of `CLAUDE.md` | `CLAUDE.section.md` |
+| `{{FALLBACK_MODEL}}` | the fallback family from A4 (the other of `opus`/`fable`, today `fable`); the same value as `__FALLBACK_MODEL__` | `task-runner.md`, `do-all/SKILL.md`, `CLAUDE.section.md` |
 | `{{CRITICAL_SUMMARY}}` | the critical paths from A1 in words ("payments, auth, migrations") | `CLAUDE.section.md` |
 | `{{STACK_SUMMARY}}`, `{{COMMANDS_TABLE}}` | the stack in one line; the commands table (tests/types/lint/build/dev server) from reconnaissance | `AGENTS.section.md` |
 | `{{INVARIANTS}}` | 3–6 project invariants from the README/docs (they match `{{DOMAIN_CHECKLIST}}`); none — "(filled in by the owner)" | `AGENTS.section.md` |
@@ -255,3 +268,112 @@ exchange, so they are never translated:
 
 The chosen value is recorded as `lang=<code>` in the section markers (`{{PIPELINE_LANG}}`), which is
 where `upgrade` reads it from.
+
+## E. Model freshness
+
+Model names age faster than the rest of the pipeline: a new generation arrives every few months, and
+a default that was right at init quietly becomes the older one. So the skill does not trust its own
+defaults: it re-checks them on every `init`, `upgrade` and `audit` (reconnaissance item 8), and the
+deployed pipeline re-checks the Codex model on every review (`MODEL_WARN=` of `review-tier.sh`).
+
+### 1. Snapshot — as of 2026-09-23
+
+**Claude.** Roles name families (`opus`, `fable`, `sonnet`); Claude Code resolves an alias to the
+newest model of that family, so a version bump inside a family needs no edit. What needs a decision
+is which family leads.
+
+| Model (alias) | Released | Agentic coding, vendor figures (Terminal-Bench 4.0 / CursorBench 4.0 / FrontierCode) | API in/out per 1M | Roles by default |
+| --- | --- | --- | --- | --- |
+| Opus 5.5 (`opus`) | 2026-09-22 | 66.4% / 57.8% / 54.4% | $4 / $20 | runner, coder, architect, reviewer, researcher, consolidator |
+| Fable 5.1 (`fable`) | before Opus 5.5 | 55.8% / 51.8% / 50.3% | $10 / $50 | fallback (`{{FALLBACK_MODEL}}`) |
+| Sonnet 5 (`sonnet`) | before Opus 5.5 | — | $2 / $10 | tester, committer, codex-reviewer (a thin wrapper around Codex) |
+
+Sonnet 5.5 and Haiku 5.5 are announced for "the coming weeks" (the `sonnet` alias picks Sonnet 5.5
+up by itself). No Fable successor is announced; when one appears, apply the leader rule (§4) again.
+
+**The alias depends on the Claude Code version.** `opus` means Opus 5.5 only from Claude Code
+2.1.280 (changelog: "now the default Opus model"); older versions resolve it to Opus 5 (52.3% on
+Terminal-Bench 4.0 — below Fable 5.1). Checked on 2026-09-23: 2.1.267 → `claude-opus-5`, 2.1.280 →
+`claude-opus-5-5`, and a project `effortLevel: high` reached Opus 5.5 (`"effort":"high"` in the
+transcript). The model and effort of any call are visible in its transcript
+(`~/.claude/projects/<dir>/<session>.jsonl`, fields `"model"` and `"effort"`).
+
+**Codex** — `~/.codex/models_cache.json` fetched 2026-09-23 by CLI 0.156.1:
+
+| Slug | Catalogue description | Status |
+| --- | --- | --- |
+| `gpt-6-sol` | Workhorse model for coding and everyday work | default `CODEX_MODEL`; released 2026-09-22, $2/$10 in the API — half of `gpt-5.6-sol`; answered this account through CLI 0.156.1 on 2026-09-23; absent from the catalogue that the ChatGPT app's bundled codex 0.154.0 receives |
+| `gpt-6-astra` | Frontier intelligence for the most demanding work | the maximum option; more Codex quota per call |
+| `gpt-6-luna` | Fast and affordable model for easier tasks | not for review |
+| `gpt-5.6-sol` | Older coding model for complex work | flagged "Older" — the previous default |
+| `gpt-5.5` | Legacy coding model | retires 2026-10-14 (successor `gpt-5.6-sol`) |
+
+The `codex@openai-codex` plugin 1.0.6 accepts effort `none|minimal|low|medium|high|xhigh`; `max`
+and `ultra` are rejected even though the catalogue lists them.
+
+**Proven in the pipeline: not yet.** Opus 5.5 and `gpt-6-sol` became defaults the day after release,
+on vendor figures, not on runs. After ~20 tasks compare `rounds=`, `found=`, `verdict=` in
+`.claude/state/runs.log` with the lines before the switch: more second rounds, or S1/S2 that only one
+reviewer finds → consider `fable` for `coder`/`reviewer` or Codex flat `xhigh`.
+
+Sources: <https://www.anthropic.com/claude-opus-5-5> ·
+<https://www.anthropic.com/claude-fable-and-mythos-5-1> ·
+<https://venturebeat.com/technology/openai-releases-gpt-6-sol-and-luna-models-slashing-api-costs-50-or-more>
+
+### 2. Codex check — local, no network
+
+```bash
+C=~/.codex/models_cache.json
+jq -r '"fetched_at=\(.fetched_at) client=\(.client_version)"' "$C"
+jq -r '.models[] | select(.visibility=="list") | [.slug, .description, (.upgrade.retirement_at // "-"), ([.supported_reasoning_levels[]?.effort] | join(","))] | @tsv' "$C"
+grep -ho 'VALID_REASONING_EFFORTS = new Set(\[[^]]*\])' ~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs | tail -1
+```
+
+A model is **flagged** when it is missing from the catalogue, has an `upgrade` field (retirement
+date, successor), or its description starts with "Older"/"Legacy". An effort is flagged when the
+plugin's set or the model's `supported_reasoning_levels` lacks it. These are the same rules as
+`MODEL_WARN=`. Check three values: the template default, the owner's `config.toml` `model`, and (in
+`upgrade`/`audit`) the repo's `CODEX_MODEL`/`CODEX_EFFORT_*`. Every Codex client on the machine (the
+CLI, the ChatGPT app, the IDE extension) rewrites the same catalogue, and the server sends an older
+client a shorter list: on 2026-09-23 the app's codex 0.154.0 got no GPT-6 models while CLI 0.156.1
+did. The plugin runs the `codex` on PATH, so "missing" counts only when `client_version` in the
+catalogue is not older than `codex --version`; `MODEL_WARN=` applies the same rule. Show
+`fetched_at` and `client_version` in the table. If the plugin's set grows beyond `xhigh`, the
+`case` in `codex-review.sh` and the A2 effort text must be updated before a higher effort is offered.
+
+### 3. Claude check — network
+
+**Claude Code version.** `claude --version` and the version of every other Claude Code the owner
+runs the pipeline from (the IDE extension — `ls ~/.vscode/extensions | grep anthropic.claude-code`,
+the desktop app). Any of them below 2.1.280 → an `[OWNER]` line "update Claude Code (`claude update`,
+the extension, the app): below 2.1.280 `opus` is Opus 5". The owner declines the update → by the
+leader rule the primary family is `fable` (Opus 5 is below Fable 5.1), and `opus` is the fallback.
+
+**Releases.** On every run: WebSearch for Anthropic model releases since the snapshot date, and WebFetch
+<https://www.anthropic.com/news> and
+<https://platform.claude.com/docs/en/about-claude/models/overview.md>. Then:
+
+- a Claude model released after the snapshot date → a reconnaissance-table row "⚠ snapshot of
+  <date> is stale: <model>, released <date>"; apply the leader rule (§4) to the figures from the
+  vendor's announcement, and cite them in the A2/A4 questions;
+- nothing new → the row "Claude models: snapshot of <date> is current";
+- no network → recommend by the snapshot and show its date in the table.
+
+The skill does not edit this file during a run. A stale snapshot → a line in the report to the
+owner: "update `knobs.md` E in the skill repository".
+
+### 4. Leader rule
+
+- **Claude primary** (runner, coder, architect, reviewer) — the family whose newest model leads on
+  agentic-coding benchmarks in the vendor's announcement (Terminal-Bench, CursorBench, SWE-bench-type
+  suites). When the figures are within ~2 points, pick the cheaper one. **Fallback**
+  (`{{FALLBACK_MODEL}}`, `fallbackModel`) — the other of `opus`/`fable`, never the runner's own model.
+  `researcher` and `review-consolidator` — `opus`, unless Opus stops being the cheaper of the two
+  strong families. `tester`, `committer`, `codex-reviewer` — `sonnet`.
+- **Codex** — `CODEX_MODEL` is the newest unflagged model whose description names coding as its
+  purpose (today `gpt-6-sol`). Frontier models (`gpt-6-astra`) are offered only as an explicit
+  option, because of the quota. Effort — by tier: `high` on R1/R2, the highest the plugin accepts
+  on R3 (today `xhigh`).
+- A flagged current value (the owner's `config.toml`, the repo's files) never becomes the
+  recommendation: recommend by this rule and give the current value as the second option labelled
+  "current" (`upgrade.md` §2).

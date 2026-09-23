@@ -1,6 +1,6 @@
 ---
 name: coder
-model: fable
+model: opus
 description: Implements a specific coding task. Use for focused implementation of one feature, a bug fix or a refactoring. One call = one atomic task.
 tools: Read, Edit, Write, Glob, Grep, Bash(grep *), Bash(rg *), Bash(find *), Bash(ls *), {{STACK_TOOLS}}{{ASSET_TOOLS}}
 ---

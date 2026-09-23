@@ -24,6 +24,7 @@
 #   BACKEND=both|claude|codex    # who reviews: claude — CODEX=none, @reviewer takes the Codex slots; codex — no Claude reader
 #   REASON=<why this tier>
 #   WARN=<only if the [review: Rn] marker lowered the tier while critical paths are touched>
+#   MODEL_WARN=<only if the Codex catalog marks CODEX_MODEL as missing/retiring/older or lacks the effort>
 #   FILES=<n> LINES=<n> CRITICAL=<comma-separated paths or none>
 #
 # Rules — in order, first match wins:
@@ -61,8 +62,9 @@ CODE_R1_MAX_LINES=60
 BINARY_LINES=1000        # a binary file counts as "large"
 
 # Codex: model and effort by tier. Agents take them ONLY from this script's output (CODEX_MODEL=, CODEX=).
-# The current model catalog is ~/.codex/models_cache.json. Changing the model is one constant here.
-CODEX_MODEL="gpt-5.6-sol"
+# The current model catalog is ~/.codex/models_cache.json (MODEL_WARN= below checks the model against it).
+# Changing the model is one constant here.
+CODEX_MODEL="gpt-6-sol"
 CODEX_EFFORT_R12="high"  # R1/R2, both rounds
 CODEX_EFFORT_R3="xhigh"  # R3, both rounds
 
@@ -231,6 +233,32 @@ esac
 MODEL_OUT=$CODEX_MODEL
 [ "$CODEX" = "none" ] && MODEL_OUT=none
 
+# ---- Codex model freshness against the local catalog: silent without jq or the catalog, never fails the run
+MODEL_WARN=""
+CATALOG="${CODEX_MODELS_CACHE:-$HOME/.codex/models_cache.json}"
+if [ "$CODEX" != "none" ] && [ -f "$CATALOG" ] && command -v jq >/dev/null 2>&1; then
+  # Several Codex clients share the catalog; one older than the `codex` the plugin runs gets a shorter list.
+  CLI_VER=$(codex --version 2>/dev/null | awk '{print $NF}')
+  MODEL_WARN=$(jq -r --arg m "$CODEX_MODEL" --arg e "$CODEX" --arg cv "$CLI_VER" '
+    def ver: tostring | split(".") | map(tonumber? // 0);
+    if (.models | type) != "array" then empty else
+    ((.fetched_at // "?") | tostring | .[0:10]) as $f
+    | (.client_version // "") as $by
+    | ([.models[] | select(.slug == $m)][0]) as $x
+    | if $x == null then
+        if $cv != "" and $by != "" and (($by | ver) < ($cv | ver)) then empty
+        else "codex model \($m) is not in the Codex catalog (fetched \($f) by codex \(if $by == "" then "?" else $by end); a rollout in progress or the model was removed)" end
+      elif $x.upgrade != null then
+        "codex model \($m) retires \(($x.upgrade.retirement_at // "soon") | tostring | .[0:10]); successor \($x.upgrade.model // "unknown")"
+      elif (($x.description // "") | test("^(older|legacy)"; "i")) then
+        "codex model \($m) is marked \"\($x.description)\" in the Codex catalog"
+      else
+        ([$x.supported_reasoning_levels[]? | (.effort? // .)]) as $lv
+        | if ($lv | length) > 0 and ($lv | index($e)) == null then "codex model \($m) does not support effort \($e)" else empty end
+      end
+    end' "$CATALOG" 2>/dev/null | head -1)
+fi
+
 echo "TIER=$TIER"
 echo "CODEX=$CODEX"
 echo "CODEX_MODEL=$MODEL_OUT"
@@ -241,5 +269,6 @@ echo "PROFILE=$REVIEW_PROFILE"
 echo "BACKEND=$REVIEW_BACKEND"
 echo "REASON=$REASON"
 [ -n "$WARN" ] && echo "WARN=$WARN"
+[ -n "$MODEL_WARN" ] && echo "MODEL_WARN=$MODEL_WARN"
 echo "FILES=$FILES LINES=$TOTAL CRITICAL=$CRIT_STR"
 exit 0
