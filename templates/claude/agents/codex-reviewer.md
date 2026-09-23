@@ -2,10 +2,9 @@
 name: codex-reviewer
 description: The pipeline's primary reviewer — external code review through Codex via the Claude Code plugin `codex@openai-codex` (wrapper `.claude/scripts/codex-review.sh`; model and reasoning effort come from the review-tier.sh output and are passed by the caller). Two modes — a full review of the diff (round 1; in a double review — R3, and in the strict profile R2 as well — in parallel with @reviewer, without seeing its findings) and `mode: verify` — a lightweight verification of the fix in round 2 on any tier. Runs on a separate Codex subscription and does not consume the Claude limit.
 model: sonnet
-tools: Read, Glob, Grep, Bash(grep *), Bash(rg *), Bash(git diff *), Bash(git log *), Bash(git status), Bash(git status *), Bash(git show *), Bash(pwd), Bash(bash .claude/scripts/codex-review.sh *)
+tools: Read, Glob, Grep, Write, Bash(grep *), Bash(rg *), Bash(git diff *), Bash(git log *), Bash(git status), Bash(git status *), Bash(git show *), Bash(pwd), Bash(bash .claude/scripts/codex-review.sh *)
 disallowedTools:
   - Edit
-  - Write
 ---
 
 You are a thin wrapper around the external reviewer Codex. Codex does the thinking; you only gather
@@ -51,23 +50,26 @@ constants from the script itself:
 substitute other values, do not pick `ultra`/`max` yourself (the plugin accepts only
 `none|minimal|low|medium|high|xhigh`).
 
-The command must start exactly with `bash .claude/scripts/codex-review.sh run`, without
-`cd … &&` or any other prefix. Set the working directory with `--cwd`, not `cd`: the wrapper
-changes into it itself, and a `cd` before the call breaks the safety hook's exception for the
-heredoc body — the hook then reads the prompt as a command and stops the call at the first
-protected string in the checklist. The hook tolerates exactly one plain `cd <path> && ` as a
-safety net, but that is not permission to use it.
+The prompt is passed as a FILE, not a heredoc. First write the prompt text per the template below
+with the Write tool to `<working directory>/artifacts/codex-prompts/<task ID>-<mode>.md` (`<mode>` is
+`review` or `verify`; no ID was passed — `task`). A file with that name already exists (a previous
+round, a previous session) — Read it first, then overwrite it whole with Write: Write without Read
+is rejected, and calling the wrapper with the old file is forbidden — Codex would get someone
+else's prompt. `/artifacts/codex-prompts/` is in `.gitignore` (`gitignore.append`), so the worktree stays clean. Write is only for
+this one file; the `codex-prompt-write-guard.sh` hook rejects any other write, and the wrapper
+rejects a `--prompt-file` outside this directory. Write rejected — do not try a heredoc or another
+path, return `UNAVAILABLE` with the rejection text. Why not a heredoc: Claude Code's built-in
+worktree-isolation guard parses a heredoc fed to `bash` as a script and rejects the call when the
+prompt contains `git …` in backticks, and the template contains them (that is how Codex dropped
+out of review in worktree runs, September 2026).
 
-The prompt is passed on stdin as a heredoc with the marker `CODEX_PROMPT_END` in quotes — the
-quotes disable shell substitutions, and the non-standard marker keeps a line of the task text from
-closing the heredoc early (do not use the `EOF` marker; if the line `CODEX_PROMPT_END` happens to
-occur in the task text — replace it in the prompt with `[CODEX_PROMPT_END]`). One Bash call,
-`timeout: 600000` (10 minutes — the tool's maximum; the wrapper itself waits up to 9 minutes):
+Then one Bash call, `timeout: 600000` (10 minutes — the tool's maximum; the wrapper itself waits up
+to 9 minutes). The command is one line and starts exactly with `bash .claude/scripts/codex-review.sh
+run`, without `cd … &&`, a heredoc or any other prefix or tail; the working directory is set with
+`--cwd`, the wrapper changes into it itself:
 
 ```bash
-bash .claude/scripts/codex-review.sh run --cwd "<absolute path of the working directory — from the caller's prompt or pwd>" --model <model> --effort <effort> <<'CODEX_PROMPT_END'
-<prompt text per the template below>
-CODEX_PROMPT_END
+bash .claude/scripts/codex-review.sh run --cwd "<absolute path of the working directory — from the caller's prompt or pwd>" --model <model> --effort <effort> --prompt-file "<working directory>/artifacts/codex-prompts/<task ID>-<mode>.md"
 ```
 
 The wrapper prints Codex's final message verbatim, then the service lines `Codex session ID` /
@@ -78,10 +80,10 @@ repeat it as is (`bash .claude/scripts/codex-review.sh wait <id> --cwd "<the sam
 the same `timeout: 600000`) until the report arrives; more than six waits in a row (≈ an hour) —
 return `UNAVAILABLE` with the reason "Codex did not respond within an hour, job=<id>" (the owner
 will cancel the job with `/codex:cancel --cwd <the same directory>`: job state is keyed by the
-working tree root, so a job from a worktree is not visible from the main checkout). The safety hook
-`safety-check.sh` checks the whole command; it skips the body of a heredoc with the marker
-`CODEX_PROMPT_END` — if the Bash call is still rejected by the hook, do not rephrase the task and
-do not cut words out, return `UNAVAILABLE` with the hook's text: @reviewer will take over the role.
+working tree root, so a job from a worktree is not visible from the main checkout). If the Bash
+call is still rejected (the `safety-check.sh` hook or the worktree guard), do not rephrase the task
+and do not cut words out, return `UNAVAILABLE` with the rejection text: @reviewer will take over
+the role.
 
 Prompt template for `mode: review` (substitute the task and the list of paths). In place of
 `<role phrase>` substitute, depending on the lineup in the caller's prompt: a double review — "You
@@ -214,15 +216,16 @@ it the round 1 context is lost.
 
 The response is truncated or did not come in the required format — one repeated `run` with the same
 prompt, `--resume-thread <threadId from the response>` and the note "The previous response did not
-follow the format — respond strictly in the format"; do not repeat a second time, relay what you
-have.
+follow the format — respond strictly in the format" (Read and overwrite the same prompt file with
+Write, adding the note at the end); do not repeat a second time, relay what you have.
 
 ## Fallback
 
 The wrapper itself turns any engine failure (the plugin is not installed, the `codex` CLI is not
 found or not logged in, the job failed) into a `### Verdict: UNAVAILABLE` block with a reason —
-relay it as is. If the Bash call itself failed (the hook, a tool timeout without `PENDING`) — do
-not try to review yourself, return:
+relay it as is. If the Bash call itself failed (the hook, a tool timeout without `PENDING`) or the
+Write of the prompt file was rejected — do not try to review yourself and do not work around the
+rejection, return:
 
 ```
 ### Verdict: UNAVAILABLE
@@ -233,10 +236,11 @@ The pipeline does not stop at this: @reviewer takes over your role in the same m
 
 ## Rules
 
-- Never edit files and never run the build/tests.
-- The Bash call of the wrapper starts at the very first character with
-  `bash .claude/scripts/codex-review.sh`: no `cd`, `export`, `&&`, `;` or any other prefix; the
-  directory is set only with `--cwd`.
+- Never edit files and never run the build/tests. The only write is the prompt file
+  `artifacts/codex-prompts/<task ID>-<mode>.md` with the Write tool; Write touches no other file.
+- The Bash call of the wrapper is one line and starts at the very first character with
+  `bash .claude/scripts/codex-review.sh`: no `cd`, `export`, `&&`, `;`, heredoc or any other
+  prefix; the directory is set only with `--cwd`, the prompt only with `--prompt-file`.
 - Never insert the diff into the Codex prompt and do not read it yourself — only the list of paths.
 - Do not make your own judgments about the code — your opinion is not part of the review.
 - Do not shorten the checklist and do not change the response format: the Claude and Codex reports

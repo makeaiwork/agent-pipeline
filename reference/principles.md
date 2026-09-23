@@ -150,6 +150,11 @@ both groups and lists them in the report.
 - `agent-sync-check.sh` (PreToolUse Agent): a background call of a pipeline agent — block. A runner
   with `run_in_background: true` ended its turn without a report, and the worktree with an empty
   diff was removed as unused (both repos, 19–20.08.2026: 4 nudges for 2 tasks).
+- `codex-prompt-write-guard.sh` (PreToolUse Write/Edit, by `agent_type`): @codex-reviewer may write
+  only its prompt file `<own tree>/artifacts/codex-prompts/<name>.md`. It needs Write because
+  Claude Code's worktree-isolation guard rejects a heredoc fed to bash when the prompt mentions
+  `git …` in backticks (September 2026: Codex silently dropped out of review in worktree runs);
+  the prompt goes to the wrapper as `--prompt-file`. No python3 — the agent's writes are blocked.
 - `review-tier.sh`, `task-commit.sh`, `active-session.sh` — deterministic logic as scripts with
   test matrices, not as prose in a prompt (an agent reproduces prose with variations).
 - `pre-compact.sh` / `session-start-compact.sh`: a snapshot of the tree and the header before

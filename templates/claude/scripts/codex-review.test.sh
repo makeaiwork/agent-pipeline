@@ -86,6 +86,42 @@ if grep -q '^task .*--background .*--fresh .*--model gpt-x .*--effort xhigh .*--
   echo "PASS: task arguments (read-only, model/effort from the arguments, prompt from stdin)"
 else echo "FAIL: task arguments:"; sed 's/^/    /' "$LOG"; FAIL=1; fi
 
+# --prompt-file: prompt from the file (with `git diff` in backticks), stdin is not read, the caller's file stays
+PD="$TMP/artifacts/codex-prompts"; mkdir -p "$PD"
+PF="$PD/T-1-review.md"
+printf 'Prompt from a file: `git diff HEAD -- README.md`\n' > "$PF"
+run_pf() { # mode, prompt-file, args... — stdin carries a decoy that must not reach the prompt
+  local mode="$1" pf="$2"; shift 2
+  : > "$LOG"; rm -f -- "$LOG.resumed"
+  printf 'stdin-must-not-leak\n' | CODEX_COMPANION="$STUB" STUB_LOG="$LOG" STUB_MODE="$mode" bash "$SCRIPT" run --cwd "$TMP" $M --prompt-file "$pf" "$@" 2>&1
+}
+out=$(run_pf ok "$PF")
+if printf '%s' "$out" | grep -qF "### Verdict: APPROVE" && grep -qF 'PROMPT<<Prompt from a file: `git diff HEAD -- README.md`' "$LOG" \
+   && ! grep -q 'stdin-must-not-leak' "$LOG" && [ -f "$PF" ]; then
+  echo "PASS: --prompt-file (prompt from the file, stdin not read, file not deleted)"
+else echo "FAIL: --prompt-file:"; printf '%s\n' "$out" | sed 's/^/    /'; sed 's/^/    /' "$LOG"; FAIL=1; fi
+
+# --prompt-file + --resume-thread (the working call of mode: verify) → the thread is resumed with the prompt from the file
+out=$(run_pf ok "$PF" --resume-thread thread-A)
+if grep -q '^task .*--resume-last' "$LOG" && grep -qF 'PROMPT<<Prompt from a file' "$LOG" && printf '%s' "$out" | grep -qF "### Verdict: APPROVE"; then
+  echo "PASS: --prompt-file + --resume-thread"
+else echo "FAIL: --prompt-file + --resume-thread:"; printf '%s\n' "$out" | sed 's/^/    /'; sed 's/^/    /' "$LOG"; FAIL=1; fi
+
+# --prompt-file outside <cwd>/artifacts/codex-prompts, with '..', missing, not .md → exit 2 before launch
+printf 'x\n' > "$TMP/outside.md"
+for bad in "$TMP/outside.md" "$PD/../../outside.md" "$PD/nope.md" "$PD/T-1-review.txt"; do
+  out=$(run_pf ok "$bad"); rc=$?
+  if [ $rc -eq 2 ] && ! grep -q '^task ' "$LOG"; then echo "PASS: --prompt-file rejected: ${bad#$TMP/}"; else echo "FAIL: --prompt-file ${bad#$TMP/} (rc=$rc): $out"; FAIL=1; fi
+done
+
+# --prompt-file empty or unreadable → UNAVAILABLE, exit 0
+: > "$PD/empty.md"
+check "--prompt-file empty → UNAVAILABLE"        "$(run_pf ok "$PD/empty.md")"     "empty prompt ($PD/empty.md)"
+printf 'x\n' > "$PD/locked.md"; chmod 000 "$PD/locked.md"
+if [ -r "$PD/locked.md" ]; then echo "SKIP: unreadable file (running as root)"
+else check "--prompt-file unreadable → UNAVAILABLE" "$(run_pf ok "$PD/locked.md")" "could not read --prompt-file"; fi
+chmod 600 "$PD/locked.md"
+
 # round 2: the thread matches the last one → --resume-last, no --fresh, no note
 out=$(run_wrapper ok $M --resume-thread thread-A)
 if grep -q '^task .*--resume-last' "$LOG" && ! grep -q -- '--fresh' "$LOG" && ! printf '%s' "$out" | grep -q 'not resumed' && printf '%s' "$out" | grep -qF "### Verdict: APPROVE"; then

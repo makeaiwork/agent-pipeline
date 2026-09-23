@@ -2,9 +2,10 @@
 # Wrapper around the Codex plugin for Claude Code (`codex@openai-codex`) — the only path by which
 # @codex-reviewer calls Codex (the `codex` MCP server was dropped from OpenAI support, 2026-09).
 #
-# Usage (prompt on stdin, a heredoc with a unique quoted marker):
+# Usage (prompt as a file via --prompt-file; without the flag — on stdin, a heredoc with a quoted marker):
 #   bash .claude/scripts/codex-review.sh run --cwd <abs-dir> --model <model> --effort <effort> \
-#        [--resume-thread <threadId>] [--wait-ms <ms>] <<'CODEX_PROMPT_END'
+#        --prompt-file <file> [--resume-thread <threadId>] [--wait-ms <ms>]
+#   bash .claude/scripts/codex-review.sh run --cwd <abs-dir> --model <model> --effort <effort> <<'CODEX_PROMPT_END'
 #   ...prompt text...
 #   CODEX_PROMPT_END
 #   bash .claude/scripts/codex-review.sh wait <job-id> --cwd <abs-dir> [--wait-ms <ms>]
@@ -14,7 +15,12 @@
 # does not know or supply them; effort is from the plugin's set none|minimal|low|medium|high|xhigh
 # (the plugin does not accept `max`/`ultra`).
 #
-# What `run` does: writes the prompt to a temp file, starts `codex-companion.mjs task --background`
+# `--prompt-file` is the path for agents in a worktree: Claude Code's built-in worktree-isolation
+# guard parses a heredoc fed to `bash` as a script and rejects the call when the prompt contains
+# `git …` in backticks. The file must be `<--cwd>/artifacts/codex-prompts/<name>.md` (the directory
+# is gitignored); the wrapper only reads it.
+#
+# What `run` does: copies the prompt to a temp file, starts `codex-companion.mjs task --background`
 # read-only (no `--write`) in the `--cwd` directory, immediately prints `job=<id> …` (so that if the
 # Bash call is cut off the job can still be awaited via `wait <id>`), then waits up to `--wait-ms`
 # (default 9 minutes — a Claude Bash call is limited to 10 minutes) and prints Codex's final message
@@ -115,16 +121,17 @@ wait_and_print() {
 }
 
 parse_common() {
-  CWD=""; MODEL=""; EFFORT=""; RESUME_THREAD=""; WAIT_MS="$DEFAULT_WAIT_MS"
+  CWD=""; MODEL=""; EFFORT=""; RESUME_THREAD=""; PROMPT_SRC=""; WAIT_MS="$DEFAULT_WAIT_MS"
   while [ $# -gt 0 ]; do
     case "$1" in
-      --cwd|--model|--effort|--resume-thread|--wait-ms)
+      --cwd|--model|--effort|--resume-thread|--prompt-file|--wait-ms)
         [ -n "${2:-}" ] || { echo "$1: value required" >&2; exit 2; }
         case "$1" in
           --cwd) CWD="$2" ;;
           --model) MODEL="$2" ;;
           --effort) EFFORT="$2" ;;
           --resume-thread) RESUME_THREAD="$2" ;;
+          --prompt-file) PROMPT_SRC="$2" ;;
           --wait-ms) WAIT_MS="$2" ;;
         esac
         shift 2 ;;
@@ -160,10 +167,23 @@ case "$CMD" in
     parse_common "$@"
     [ -n "$MODEL" ] || { echo "--model is required (CODEX_MODEL= from review-tier.sh)" >&2; exit 2; }
     case "$EFFORT" in none|minimal|low|medium|high|xhigh) ;; *) echo "--effort must be one of none|minimal|low|medium|high|xhigh (got: '${EFFORT}')" >&2; exit 2 ;; esac
+    if [ -n "$PROMPT_SRC" ]; then
+      # only the gitignored prompt dir of this tree: a stray path would land in the task commit
+      case "$PROMPT_SRC" in
+        */../*|*/./*) echo "--prompt-file: path with '..' or '.': $PROMPT_SRC" >&2; exit 2 ;;
+        "${CWD%/}"/artifacts/codex-prompts/*.md) ;;
+        *) echo "--prompt-file: only ${CWD%/}/artifacts/codex-prompts/<name>.md (got: $PROMPT_SRC)" >&2; exit 2 ;;
+      esac
+      [ -f "$PROMPT_SRC" ] || { echo "--prompt-file: file not found: $PROMPT_SRC" >&2; exit 2; }
+    fi
     PROMPT_FILE=$(new_tmp) || unavailable "could not create a temp prompt file"
     trap 'rm -f -- "$PROMPT_FILE"' EXIT   # the file is needed until the last launch (fallback after resume); any exit — cleanup
-    cat > "$PROMPT_FILE"
-    [ -s "$PROMPT_FILE" ] || { rm -- "$PROMPT_FILE"; unavailable "empty prompt on stdin"; }
+    if [ -n "$PROMPT_SRC" ]; then
+      cat -- "$PROMPT_SRC" > "$PROMPT_FILE" || unavailable "could not read --prompt-file: $PROMPT_SRC"
+    else
+      cat > "$PROMPT_FILE"
+    fi
+    [ -s "$PROMPT_FILE" ] || { rm -- "$PROMPT_FILE"; unavailable "empty prompt (${PROMPT_SRC:-stdin})"; }
     # Gate only on CLI presence: `setup` also reports ready=false when the shared broker is busy
     # ("Shared Codex broker is busy"), although task then goes to the direct app-server and runs;
     # a missing login will surface as a failed job with the real reason.

@@ -1,3 +1,4 @@
-# agent-pipeline: local pipeline artifacts (pre-compaction snapshots, telemetry, task worktrees)
+# agent-pipeline: local pipeline artifacts (pre-compaction snapshots, telemetry, task worktrees, Codex review prompts)
 .claude/state/
 .claude/worktrees/
+/artifacts/codex-prompts/

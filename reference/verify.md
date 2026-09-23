@@ -9,6 +9,7 @@ both modes, §9 is upgrade only.
 ```bash
 bash .claude/hooks/safety-check.test.sh        # expected passed: 86, failed: 0
 bash .claude/hooks/agent-sync-check.test.sh    # 20/20
+bash .claude/hooks/codex-prompt-write-guard.test.sh   # pass=31 fail=0
 bash .claude/scripts/review-tier.test.sh       # PASS=78 FAIL=0 (the test builds the profile and backend variants itself; interview constants have no effect)
 bash .claude/scripts/active-session.test.sh    # 34/34
 bash .claude/scripts/task-commit.test.sh       # 19/19
@@ -38,7 +39,9 @@ printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}
 printf '%s' '{"tool_name":"Agent","tool_input":{"subagent_type":"coder","run_in_background":true}}' | bash .claude/hooks/agent-sync-check.sh; echo "exit=$?"   # exit 2
 printf '%s' '{"trigger":"manual","session_id":"verify"}' | bash .claude/hooks/pre-compact.sh && ls .claude/state/compact-context.md   # the file has appeared
 bash .claude/hooks/session-start-compact.sh | head -3     # prints the snapshot
-jq -r '.hooks.PreToolUse[].hooks[].command' .claude/settings.json | grep -c 'safety-check.sh\|agent-sync-check.sh'   # 2 — both PreToolUse hooks are registered (the owner may have their own as well)
+printf '%s' '{"agent_type":"codex-reviewer","tool_name":"Write","cwd":"'"$PWD"'","tool_input":{"file_path":"'"$PWD"'/src/x.md"}}' | bash .claude/hooks/codex-prompt-write-guard.sh; echo "exit=$?"   # exit 2
+jq -r '.hooks.PreToolUse[].hooks[].command' .claude/settings.json | grep -c 'safety-check.sh\|agent-sync-check.sh\|codex-prompt-write-guard.sh'   # 3 — all three PreToolUse hooks are registered (the owner may have their own as well)
+git check-ignore -q artifacts/codex-prompts/x.md && echo ignored   # ignored — Codex prompt files never reach a task commit
 ```
 
 ## 4. Worktree

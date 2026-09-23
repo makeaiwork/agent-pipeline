@@ -116,8 +116,8 @@ From there on: tasks as lines in `todo.md`, and `/do-all`.
   skills/      do-all, do-next, status
   scripts/     review-tier.sh, codex-review.sh, codex-image.sh,
                active-session.sh, task-commit.sh (+ tests)
-  hooks/       safety-check, agent-sync-check, post-edit, pre-compact,
-               session-start-compact, notify (+ tests)
+  hooks/       safety-check, agent-sync-check, codex-prompt-write-guard,
+               post-edit, pre-compact, session-start-compact, notify (+ tests)
   settings.json
 CLAUDE.md      pipeline section + @AGENTS.md import
 AGENTS.md      project snapshot, commands, invariants, safety rules
