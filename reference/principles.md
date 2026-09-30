@@ -34,7 +34,7 @@ prompts lowers quality on Fable 5.x and bloats the runner).
 | `architect`           | opus            | —                     | how to rework it (large tasks, `ARCHITECTURE_REVIEW`)                                                     |
 | `coder`               | opus            | code                  | one atomic implementation                                                                                 |
 | `tester`              | sonnet          | —                     | test run, diagnostics, visual UI check                                                                    |
-| `codex-reviewer`      | (Codex, plugin) | —                     | main review of round 1, fix verification in round 2 on the same thread                                    |
+| `codex-reviewer`      | (Codex CLI)     | —                     | main review of round 1, fix verification in round 2 on the same thread                                    |
 | `reviewer`            | opus            | —                     | second independent reader (double review) and replacement for Codex on `UNAVAILABLE`                      |
 | `review-consolidator` | opus            | scratchpad file       | with two reports: checks only the disagreements against the code, issues the routing verdict              |
 | `committer`           | sonnet          | docs, git             | commit by an explicit set of paths + docs by trigger rules; ≤1 commit per runner exit                     |
@@ -155,6 +155,13 @@ both groups and lists them in the report.
   Claude Code's worktree-isolation guard rejects a heredoc fed to bash when the prompt mentions
   `git …` in backticks (September 2026: Codex silently dropped out of review in worktree runs);
   the prompt goes to the wrapper as `--prompt-file`. No python3 — the agent's writes are blocked.
+- `codex-review.sh` calls `codex exec` directly, not through a Claude Code plugin or MCP: the CLI is
+  OpenAI's documented non-interactive interface (JSONL events, `-o` final message, read-only
+  sandbox, `resume <id>`), and every integration is a layer over it. The `codex` MCP server lost
+  support (2026-09); the `codex@openai-codex` plugin (the path until 2026-09-30) needed `node` and
+  its own job store, stopped effort at `xhigh` and resumed only the last thread of a working tree,
+  so round 2 needed an id comparison and a fallback. The wrapper keeps what the plugin gave: the job
+  runs detached (its own session), `PENDING`/`wait <id>` across the 10-minute Bash limit, `cancel`.
 - `review-tier.sh`, `task-commit.sh`, `active-session.sh` — deterministic logic as scripts with
   test matrices, not as prose in a prompt (an agent reproduces prose with variations).
 - `pre-compact.sh` / `session-start-compact.sh`: a snapshot of the tree and the header before
@@ -166,12 +173,13 @@ both groups and lists them in the report.
   environment.
 - Models age: agents name families (`opus`/`fable`/`sonnet`), which Claude Code resolves to the
   newest version, and the Codex model lives in one constant of `review-tier.sh`, which prints
-  `MODEL_WARN=` when the local Codex catalog marks it as missing, retiring or older. Which family
-  leads is re-checked by the skill on every init/upgrade/audit. History: until 2026-09-23 the
+  `MODEL_WARN=` when the local Codex catalog marks it as missing, retiring, older or
+  previous-generation. Which family leads is re-checked by the skill on every init/upgrade/audit. History: until 2026-09-23 the
   defaults were `fable` for runner/coder/architect/reviewer with an `opus` fallback and Codex
   `gpt-5.6-sol` `high`/`xhigh` by tier; on 2026-09-23 they moved to `opus` (Opus 5.5 led Fable 5.1
   on agentic benchmarks at 40% of the price) with a `fable` fallback, and to Codex `gpt-6-sol`
-  (half the price of `gpt-5.6-sol`), still `high`/`xhigh` by tier — on vendor figures, to be
+  (half the price of `gpt-5.6-sol`), still `high`/`xhigh` by tier; on 2026-09-30 Codex moved to
+  `gpt-6.1-sol` (the catalog now marks `gpt-6-sol` "Previous generation") — on vendor figures, to be
   confirmed by `runs.log`.
 - Agent frontmatter: `tools:` is an allow-list; `disallowedTools: Bash(…)` disables Bash entirely;
   `allowedTools` is a dead key.

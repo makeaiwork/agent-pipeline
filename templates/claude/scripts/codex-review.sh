@@ -1,6 +1,8 @@
 #!/bin/bash
-# Wrapper around the Codex plugin for Claude Code (`codex@openai-codex`) — the only path by which
-# @codex-reviewer calls Codex (the `codex` MCP server was dropped from OpenAI support, 2026-09).
+# Wrapper around the Codex CLI (`codex exec`) — the only path by which @codex-reviewer calls Codex.
+# History: the `codex` MCP server was dropped from OpenAI support (2026-09); the Claude Code plugin
+# `codex@openai-codex` was the path until 2026-09-30 — it is a layer over the same CLI, capped effort
+# at `xhigh` and could resume only the last thread of a working tree.
 #
 # Usage (prompt as a file via --prompt-file; without the flag — on stdin, a heredoc with a quoted marker):
 #   bash .claude/scripts/codex-review.sh run --cwd <abs-dir> --model <model> --effort <effort> \
@@ -8,116 +10,156 @@
 #   bash .claude/scripts/codex-review.sh run --cwd <abs-dir> --model <model> --effort <effort> <<'CODEX_PROMPT_END'
 #   ...prompt text...
 #   CODEX_PROMPT_END
-#   bash .claude/scripts/codex-review.sh wait <job-id> --cwd <abs-dir> [--wait-ms <ms>]
-#   bash .claude/scripts/codex-review.sh check            # plugin/CLI/login readiness, JSON
+#   bash .claude/scripts/codex-review.sh wait <job-id> [--cwd <abs-dir>] [--wait-ms <ms>]
+#   bash .claude/scripts/codex-review.sh cancel <job-id>
+#   bash .claude/scripts/codex-review.sh check            # CLI/login readiness, JSON
 #
 # Model and effort come ONLY from the review-tier.sh output (`CODEX_MODEL=`, `CODEX=`): the wrapper
-# does not know or supply them; effort is from the plugin's set none|minimal|low|medium|high|xhigh
-# (the plugin does not accept `max`/`ultra`).
+# does not know or supply them; effort is one of low|medium|high|xhigh|max (`ultra` is refused by
+# design: it delegates subtasks on its own, so review time becomes unpredictable).
 #
 # `--prompt-file` is the path for agents in a worktree: Claude Code's built-in worktree-isolation
 # guard parses a heredoc fed to `bash` as a script and rejects the call when the prompt contains
 # `git …` in backticks. The file must be `<--cwd>/artifacts/codex-prompts/<name>.md` (the directory
 # is gitignored); the wrapper only reads it.
 #
-# What `run` does: copies the prompt to a temp file, starts `codex-companion.mjs task --background`
-# read-only (no `--write`) in the `--cwd` directory, immediately prints `job=<id> …` (so that if the
-# Bash call is cut off the job can still be awaited via `wait <id>`), then waits up to `--wait-ms`
-# (default 9 minutes — a Claude Bash call is limited to 10 minutes) and prints Codex's final message
-# verbatim, with `threadId: <id>` as the last line (round 2 resumes the same thread by it).
+# What `run` does: copies the prompt into a job directory, starts `codex exec` detached from the
+# call (read-only sandbox, approvals off, in the `--cwd` directory), immediately prints `job=<id> …`
+# (so that if the Bash call is cut off the job can still be awaited via `wait <id>`), then waits up
+# to `--wait-ms` (default 9 minutes — a Claude Bash call is limited to 10 minutes) and prints Codex's
+# final message verbatim, with `threadId: <id>` as the last line (round 2 resumes the thread by it).
 # If Codex is still thinking — prints `PENDING job=<id>`; the caller repeats `wait <job-id>`.
-# `--resume-thread <id>` (round 2): the plugin can resume only the LAST task thread in this
-# working tree, so the wrapper compares its id with the given one before launch and with the actual
-# `threadId` after: match — the thread is resumed (model and effort are passed anyway); no match, or
-# the resume failed in the first wait window (a foreign job is running, thread not found) — a new
-# thread, and the report prints "Round 1 thread not resumed: <reason>" before Codex's answer.
-# Any engine failure (plugin not found, CLI not installed, the job failed or returned no result) —
+# `--resume-thread <id>` (round 2): `codex exec resume <id>` with the given model and effort; the
+# resume failed in the first wait window (thread not found) — a new thread, and the report prints
+# "Round 1 thread not resumed: <reason>" before Codex's answer.
+# Any engine failure (CLI not installed, not logged in, the job failed or returned no message) —
 # a `### Verdict: UNAVAILABLE` block with the reason, exit code 0: the wrapper agent relays it as is,
 # and @reviewer takes over its role.
 #
-# Job state is shared with the plugin's `/codex:status` and `/codex:cancel` (`CLAUDE_PLUGIN_DATA`), but
-# it is keyed by the working-tree root: those commands see a job from a pipeline worktree only with
-# `--cwd <worktree>` (from the main checkout they do not see it).
+# Job state: `$CODEX_REVIEW_JOBS/<job-id>/` (default `$TMPDIR/codex-review-jobs`): prompt, JSONL
+# events, stderr, final message, exit code; directories older than 7 days are removed on `run`.
 #
-# Environment variable CODEX_COMPANION — explicit path to codex-companion.mjs (for tests, overrides the lookup).
+# Environment variable CODEX_BIN — explicit path to `codex` (for tests, overrides the PATH lookup).
 #
 # Regression test: bash .claude/scripts/codex-review.test.sh
 
 set -u
 
-PLUGIN_KEY="codex@openai-codex"
 DEFAULT_WAIT_MS=540000
-POLL_MS=3000
-HOME_DIR="${HOME:-/tmp}"
-PLUGIN_DATA_DIR="${CLAUDE_PLUGIN_DATA:-$HOME_DIR/.claude/plugins/data/codex-openai-codex}"
+TMP_BASE="${TMPDIR:-/tmp}"
+JOBS_DIR="${CODEX_REVIEW_JOBS:-${TMP_BASE%/}/codex-review-jobs}"
+JOBS_DIR="${JOBS_DIR%/}"
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
 unavailable() {
   printf '### Verdict: UNAVAILABLE\nReason: %s\n' "$1"
   exit 0
 }
 
-resolve_companion() {
-  if [ -n "${CODEX_COMPANION:-}" ]; then
-    [ -f "$CODEX_COMPANION" ] && { echo "$CODEX_COMPANION"; return 0; }
+resolve_codex() {
+  if [ -n "${CODEX_BIN:-}" ]; then
+    [ -x "$CODEX_BIN" ] && { echo "$CODEX_BIN"; return 0; }
     return 1
   fi
-  local registry="$HOME_DIR/.claude/plugins/installed_plugins.json" install_path=""
-  if [ -f "$registry" ] && command -v jq >/dev/null 2>&1; then
-    install_path=$(jq -r --arg k "$PLUGIN_KEY" '(.plugins // .)[$k] // [] | map(select(.installPath != null)) | (max_by(.installedAt) // {}) | .installPath // ""' "$registry" 2>/dev/null)
-    if [ -n "$install_path" ] && [ -f "$install_path/scripts/codex-companion.mjs" ]; then
-      echo "$install_path/scripts/codex-companion.mjs"; return 0
-    fi
-  fi
-  # fallback path — the newest version in the plugin cache
-  local candidate
-  candidate=$(ls -d "$HOME_DIR"/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V | tail -1)
-  if [ -n "$candidate" ] && [ -f "$candidate" ]; then
-    echo "$candidate"; return 0
-  fi
-  return 1
+  command -v codex 2>/dev/null
 }
 
-companion() {
-  CLAUDE_PLUGIN_DATA="$PLUGIN_DATA_DIR" node "$COMPANION" "$@"
+job_dir() { # job-id → JOB_DIR; only ids this wrapper issues (no path tricks)
+  case "$1" in cr-[0-9]*) ;; *) echo "invalid job-id: '$1'" >&2; exit 2 ;; esac
+  case "$1" in *[!A-Za-z0-9-]*) echo "invalid job-id: '$1'" >&2; exit 2 ;; esac
+  JOB_DIR="$JOBS_DIR/$1"
 }
 
-new_tmp() { mktemp "${TMPDIR:-/tmp}/codex-review.XXXXXX"; }
+# Runs detached from the caller: one `codex exec` for the job, then writes its exit code to `rc`.
+run_job() { # job-dir
+  local job="$1" codex_pid rc
+  # shellcheck source=/dev/null
+  . "$job/job.env"
+  cd "$JOB_CWD" 2>"$job/stderr.txt" || { echo 1 > "$job/rc"; return; }
+  set -- exec
+  [ -n "$JOB_RESUME" ] && set -- "$@" resume "$JOB_RESUME"
+  set -- "$@" --skip-git-repo-check -m "$JOB_MODEL" -c "model_reasoning_effort=\"$JOB_EFFORT\"" \
+    -c 'sandbox_mode="read-only"' -c 'approval_policy="never"' --json -o "$job/last.md" -
+  "$JOB_CODEX" "$@" < "$job/prompt.md" > "$job/events.jsonl" 2> "$job/stderr.txt" &
+  codex_pid=$!
+  echo "$codex_pid" > "$job/codex.pid"
+  wait "$codex_pid"; rc=$?
+  echo "$rc" > "$job/rc.tmp" && mv -- "$job/rc.tmp" "$job/rc"
+}
+
+# Start a job: jobId → JOB_ID, error → LAUNCH_ERR; return code — launch success.
+launch_job() { # prompt-file resume-thread-or-empty
+  local job
+  JOB_ID="cr-$(date +%Y%m%d%H%M%S)-$$-${RANDOM}"
+  job="$JOBS_DIR/$JOB_ID"
+  mkdir -p -- "$job" || { LAUNCH_ERR="could not create the job directory $job"; return 1; }
+  cp -- "$1" "$job/prompt.md" || { LAUNCH_ERR="could not copy the prompt into $job"; return 1; }
+  {
+    printf 'JOB_CWD=%q\n' "$CWD"
+    printf 'JOB_MODEL=%q\n' "$MODEL"
+    printf 'JOB_EFFORT=%q\n' "$EFFORT"
+    printf 'JOB_RESUME=%q\n' "$2"
+    printf 'JOB_CODEX=%q\n' "$CODEX"
+  } > "$job/job.env"
+  # own session: the job outlives a Bash call that is cut off at the tool's time limit
+  if command -v perl >/dev/null 2>&1; then
+    nohup perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash "$SELF" _job "$job" </dev/null >/dev/null 2>&1 &
+  else
+    nohup bash "$SELF" _job "$job" </dev/null >/dev/null 2>&1 &
+  fi
+  echo $! > "$job/runner.pid"
+  printf 'job=%s started; if this call is cut off, wait for it: bash .claude/scripts/codex-review.sh wait %s --cwd %q\n' "$JOB_ID" "$JOB_ID" "$CWD"
+}
+
+# The reason a finished job failed: the last turn error, else the last error event, else stderr.
+failure_reason() { # job-dir
+  local job="$1" reason
+  reason=$(jq -r 'select(.type == "turn.failed") | .error.message // empty' "$job/events.jsonl" 2>/dev/null | tail -1)
+  [ -n "$reason" ] || reason=$(jq -r 'select(.type == "error") | .message // empty' "$job/events.jsonl" 2>/dev/null | tail -1)
+  [ -n "$reason" ] || reason=$(tail -c 1500 "$job/stderr.txt" 2>/dev/null | tr '\n' ' ')
+  printf '%s' "$reason" | head -c 1500
+}
 
 # Waits for the job up to WAIT_MS. Prints the result (+ threadId as the last line) or PENDING.
-# Argument 4 = "resume": on status failed/cancelled it does not exit but returns 3 with the reason in
-# FAIL_REASON — the caller will start a new thread.
-wait_and_print() {
-  local job_id="$1" cwd="$2" wait_ms="$3" on_fail="${4:-}" snapshot status timed_out result rc err_file result_err thread_id
-  snapshot=$(companion status "$job_id" --cwd "$cwd" --wait --timeout-ms "$wait_ms" --poll-interval-ms "$POLL_MS" --json 2>/dev/null) \
-    || unavailable "codex-companion status failed for job $job_id"
-  status=$(printf '%s' "$snapshot" | jq -r '.job.status // "unknown"' 2>/dev/null)
-  timed_out=$(printf '%s' "$snapshot" | jq -r '.waitTimedOut // false' 2>/dev/null)
-  if [ "$timed_out" = "true" ] || [ "$status" = "queued" ] || [ "$status" = "running" ]; then
-    printf 'PENDING job=%s status=%s — Codex is still working; repeat: bash .claude/scripts/codex-review.sh wait %s --cwd %q\n' \
-      "$job_id" "$status" "$job_id" "$cwd"
-    exit 0
+# Argument 3 = "resume": on failure it does not exit but returns 3 with the reason in FAIL_REASON —
+# the caller will start a new thread.
+wait_and_print() { # job-id wait-ms [resume]
+  local job_id="$1" wait_ms="$2" on_fail="${3:-}" job deadline runner rc thread_id reason
+  job_dir "$job_id"; job="$JOB_DIR"
+  [ -d "$job" ] || unavailable "no Codex job $job_id in $JOBS_DIR"
+  deadline=$(( $(date +%s) + wait_ms / 1000 ))
+  while [ ! -f "$job/rc" ]; do
+    runner=$(cat "$job/runner.pid" 2>/dev/null)
+    if [ -n "$runner" ] && ! kill -0 "$runner" 2>/dev/null && [ ! -f "$job/rc" ]; then
+      unavailable "Codex job $job_id stopped without an exit code (killed?): $(failure_reason "$job")"
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      printf 'PENDING job=%s status=running — Codex is still working; repeat: bash .claude/scripts/codex-review.sh wait %s --cwd %q\n' \
+        "$job_id" "$job_id" "$CWD"
+      exit 0
+    fi
+    sleep 1
+  done
+  rc=$(cat "$job/rc")
+  thread_id=$(jq -r 'select(.type == "thread.started") | .thread_id // empty' "$job/events.jsonl" 2>/dev/null | head -1)
+  if [ "$rc" = "0" ] && [ -s "$job/last.md" ]; then
+    if [ "$on_fail" = "resume" ] && [ "$thread_id" != "$RESUME_THREAD" ]; then
+      printf 'Round 1 thread not resumed: Codex answered in thread %s instead of %s\n' "${thread_id:-?}" "$RESUME_THREAD"
+    fi
+    cat -- "$job/last.md"
+    printf '\n'
+    if [ -n "$thread_id" ]; then
+      printf '\nCodex session ID: %s\nResume in Codex: codex resume %s\nthreadId: %s\n' "$thread_id" "$thread_id" "$thread_id"
+    fi
+    return 0
   fi
-  err_file=$(new_tmp) || unavailable "could not create a temp file"
-  result=$(companion result "$job_id" --cwd "$cwd" 2>"$err_file"); rc=$?
-  result_err=$(head -c 1500 "$err_file"); rm -- "$err_file"
-  case "$status" in
-    completed)
-      [ $rc -eq 0 ] && [ -n "$result" ] || unavailable "Codex job $job_id completed, but result returned no report (rc=$rc): $(printf '%s' "$result" | head -c 1500) ${result_err}"
-      thread_id=$(companion result "$job_id" --cwd "$cwd" --json 2>/dev/null | jq -r '.storedJob.threadId // .job.threadId // empty' 2>/dev/null)
-      # race: between the candidate check and the worker start, a foreign thread may have become the last one
-      if [ "$on_fail" = "resume" ] && [ "$thread_id" != "$RESUME_THREAD" ]; then
-        printf 'Round 1 thread not resumed: resumed thread %s instead of %s (race with another Codex job in this tree)\n' "${thread_id:-?}" "$RESUME_THREAD"
-      fi
-      printf '%s\n' "$result"
-      [ -n "$thread_id" ] && printf 'threadId: %s\n' "$thread_id"
-      return 0 ;;
-    *)
-      if [ "$on_fail" = "resume" ]; then
-        FAIL_REASON="the resume failed with status '$status': $(printf '%s' "$result" | head -c 500) ${result_err}"
-        return 3
-      fi
-      unavailable "Codex job $job_id finished with status '$status': $(printf '%s' "$result" | head -c 1500) ${result_err}" ;;
-  esac
+  if [ "$rc" = "0" ]; then reason="Codex finished without a final message"; else reason="rc=$rc: $(failure_reason "$job")"; fi
+  if [ "$on_fail" = "resume" ]; then
+    FAIL_REASON="the resume failed ($reason)"
+    return 3
+  fi
+  [ -n "$thread_id" ] || reason="$reason (no thread opened — not logged in? codex login)"
+  unavailable "Codex job $job_id failed, $reason"
 }
 
 parse_common() {
@@ -138,35 +180,31 @@ parse_common() {
       *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
   done
+  case "$WAIT_MS" in *[!0-9]*) echo "--wait-ms must be a whole number (got: '$WAIT_MS')" >&2; exit 2 ;; esac
   [ -n "$CWD" ] || CWD="$(pwd)"
   [ -d "$CWD" ] || unavailable "--cwd directory does not exist: $CWD"
 }
 
-# Launch a job: jobId → JOB_ID, error → LAUNCH_ERR; return code — launch success.
-launch_task() { # prompt_file --fresh|--resume-last
-  local prompt_file="$1"; shift
-  local err_file launch rc
-  err_file=$(new_tmp) || { LAUNCH_ERR="could not create a temp file"; return 1; }
-  launch=$(companion task --cwd "$CWD" --background "$@" --model "$MODEL" --effort "$EFFORT" --prompt-file "$prompt_file" --json 2>"$err_file"); rc=$?
-  LAUNCH_ERR="$(printf '%s' "$launch" | head -c 1500) $(head -c 1500 "$err_file")"
-  rm -- "$err_file"
-  JOB_ID=$(printf '%s' "$launch" | jq -r '.jobId // empty' 2>/dev/null)
-  [ $rc -eq 0 ] && [ -n "$JOB_ID" ] || return 1
-  printf 'job=%s started; if this call is cut off, wait for it: bash .claude/scripts/codex-review.sh wait %s --cwd %q\n' "$JOB_ID" "$JOB_ID" "$CWD"
-}
-
 CMD="${1:-}"; shift || true
-COMPANION=$(resolve_companion) || unavailable "plugin $PLUGIN_KEY not found (~/.claude/plugins/installed_plugins.json); install: claude plugin marketplace add openai/codex-plugin-cc && claude plugin install $PLUGIN_KEY"
-command -v node >/dev/null 2>&1 || unavailable "node not found in PATH"
+
+if [ "$CMD" = "_job" ]; then run_job "$1"; exit 0; fi
+
+CODEX=$(resolve_codex) || unavailable "codex CLI not found in PATH; install: npm i -g @openai/codex, then codex login"
 command -v jq >/dev/null 2>&1 || unavailable "jq not found in PATH"
 
 case "$CMD" in
   check)
-    companion setup --json ;;
+    version=$("$CODEX" --version 2>&1); version_rc=$?
+    login=$("$CODEX" login status 2>&1); login_rc=$?
+    version=$(printf '%s' "$version" | head -1)
+    login=$(printf '%s' "$login" | head -3 | tr '\n' ' ')
+    jq -n --arg v "$version" --argjson vok "$([ $version_rc -eq 0 ] && echo true || echo false)" \
+          --arg l "$login" --argjson lok "$([ $login_rc -eq 0 ] && echo true || echo false)" \
+      '{ready: ($vok and $lok), codex: {available: $vok, detail: $v}, auth: {loggedIn: $lok, detail: $l}}' ;;
   run)
     parse_common "$@"
     [ -n "$MODEL" ] || { echo "--model is required (CODEX_MODEL= from review-tier.sh)" >&2; exit 2; }
-    case "$EFFORT" in none|minimal|low|medium|high|xhigh) ;; *) echo "--effort must be one of none|minimal|low|medium|high|xhigh (got: '${EFFORT}')" >&2; exit 2 ;; esac
+    case "$EFFORT" in low|medium|high|xhigh|max) ;; *) echo "--effort must be one of low|medium|high|xhigh|max (got: '${EFFORT}')" >&2; exit 2 ;; esac
     if [ -n "$PROMPT_SRC" ]; then
       # only the gitignored prompt dir of this tree: a stray path would land in the task commit
       case "$PROMPT_SRC" in
@@ -176,44 +214,41 @@ case "$CMD" in
       esac
       [ -f "$PROMPT_SRC" ] || { echo "--prompt-file: file not found: $PROMPT_SRC" >&2; exit 2; }
     fi
-    PROMPT_FILE=$(new_tmp) || unavailable "could not create a temp prompt file"
-    trap 'rm -f -- "$PROMPT_FILE"' EXIT   # the file is needed until the last launch (fallback after resume); any exit — cleanup
+    mkdir -p -- "$JOBS_DIR" || unavailable "could not create $JOBS_DIR"
+    find "$JOBS_DIR" -mindepth 1 -maxdepth 1 -type d -name 'cr-*' -mtime +7 -exec rm -rf -- {} + 2>/dev/null
+    PROMPT_FILE=$(mktemp "$JOBS_DIR/prompt.XXXXXX") || unavailable "could not create a temp prompt file"
+    trap 'rm -f -- "$PROMPT_FILE"' EXIT   # the file is needed until the last launch (fallback after resume)
     if [ -n "$PROMPT_SRC" ]; then
       cat -- "$PROMPT_SRC" > "$PROMPT_FILE" || unavailable "could not read --prompt-file: $PROMPT_SRC"
     else
       cat > "$PROMPT_FILE"
     fi
-    [ -s "$PROMPT_FILE" ] || { rm -- "$PROMPT_FILE"; unavailable "empty prompt (${PROMPT_SRC:-stdin})"; }
-    # Gate only on CLI presence: `setup` also reports ready=false when the shared broker is busy
-    # ("Shared Codex broker is busy"), although task then goes to the direct app-server and runs;
-    # a missing login will surface as a failed job with the real reason.
-    codex_available=$(companion setup --cwd "$CWD" --json 2>/dev/null | jq -r '.codex.available // false' 2>/dev/null)
-    [ "$codex_available" = "true" ] || { rm -- "$PROMPT_FILE"; unavailable "codex CLI not found (codex-companion setup: codex.available=false) — /codex:setup"; }
-    NOT_RESUMED=""
+    [ -s "$PROMPT_FILE" ] || unavailable "empty prompt (${PROMPT_SRC:-stdin})"
     if [ -n "$RESUME_THREAD" ]; then
-      candidate=$(companion task-resume-candidate --cwd "$CWD" --json 2>/dev/null | jq -r 'select(.available == true) | .candidate.threadId // empty' 2>/dev/null)
-      if [ "$candidate" = "$RESUME_THREAD" ]; then
-        if launch_task "$PROMPT_FILE" --resume-last; then
-          # a resume error (a foreign job is running, thread not found) surfaces in the worker as failed —
-          # catch it in the first wait window and fall back to a new thread
-          wait_and_print "$JOB_ID" "$CWD" "$WAIT_MS" resume && exit 0
-          NOT_RESUMED="$FAIL_REASON"
-        else
-          NOT_RESUMED="launch with --resume-last failed: ${LAUNCH_ERR}"
-        fi
+      if launch_job "$PROMPT_FILE" "$RESUME_THREAD"; then
+        # a resume error (thread not found) fails fast — catch it in the first wait window and fall back to a new thread
+        wait_and_print "$JOB_ID" "$WAIT_MS" resume && exit 0
+        NOT_RESUMED="$FAIL_REASON"
       else
-        NOT_RESUMED="the last Codex thread in this tree is '${candidate:-none}', not '$RESUME_THREAD'"
+        NOT_RESUMED="launch failed: ${LAUNCH_ERR}"
       fi
       printf 'Round 1 thread not resumed: %s\n' "$NOT_RESUMED"
     fi
-    launch_task "$PROMPT_FILE" --fresh || unavailable "Codex job launch failed: ${LAUNCH_ERR}"
-    # the prompt was read by the runner synchronously and is stored in the job record — the trap removes the file
-    wait_and_print "$JOB_ID" "$CWD" "$WAIT_MS" ;;
+    launch_job "$PROMPT_FILE" "" || unavailable "Codex job launch failed: ${LAUNCH_ERR}"
+    wait_and_print "$JOB_ID" "$WAIT_MS" ;;
   wait)
     JOB_ID="${1:-}"; shift || true
     [ -n "$JOB_ID" ] || { echo "wait: job-id required" >&2; exit 2; }
     parse_common "$@"
-    wait_and_print "$JOB_ID" "$CWD" "$WAIT_MS" ;;
+    wait_and_print "$JOB_ID" "$WAIT_MS" ;;
+  cancel)
+    JOB_ID="${1:-}"
+    [ -n "$JOB_ID" ] || { echo "cancel: job-id required" >&2; exit 2; }
+    job_dir "$JOB_ID"; job="$JOB_DIR"
+    [ -d "$job" ] || { echo "no Codex job $JOB_ID in $JOBS_DIR" >&2; exit 1; }
+    [ -f "$job/rc" ] && { echo "job $JOB_ID already finished (rc=$(cat "$job/rc"))"; exit 0; }
+    kill "$(cat "$job/codex.pid" 2>/dev/null)" 2>/dev/null || kill "$(cat "$job/runner.pid" 2>/dev/null)" 2>/dev/null
+    echo "job $JOB_ID cancelled" ;;
   *)
-    sed -n '2,12p' "$0" >&2; exit 2 ;;
+    sed -n '7,15p' "$0" >&2; exit 2 ;;
 esac

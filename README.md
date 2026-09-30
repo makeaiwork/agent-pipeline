@@ -56,9 +56,9 @@ The `strict` and `light` profiles shift this scale up or down. Round 2 happens o
 ## Features
 
 - **A mandatory interview instead of defaults.** Five questions (critical paths, who reviews, strictness, executor models, docs and UI), each with pros and cons for every option and a recommendation for your project based on what reconnaissance found.
-- **Codex as the primary reviewer** via the [`openai/codex-plugin-cc`](https://github.com/openai/codex-plugin-cc) plugin: review runs on your ChatGPT subscription and does not consume your Claude limit. If Codex is unavailable, the Claude reviewer takes its role in the same mode — the pipeline does not stop.
-- **Models that do not go stale.** Defaults (today: Claude Opus 5.5 for the executors and the Claude reviewer, Fable as the fallback, Codex `gpt-6-sol` at `high`, `xhigh` on critical paths) are re-checked on every `init`/`upgrade`/`audit` against your local Codex catalog and Anthropic's official pages; the deployed pipeline prints `MODEL_WARN` when Codex marks the review model as older or retiring.
-- **Tool installation by consent.** If the Codex plugin, the Codex CLI or rembg is missing, the skill shows the exact commands, asks, and installs only what you tick. Nothing is ever installed silently.
+- **Codex as the primary reviewer** via the Codex CLI (`codex exec` in a read-only sandbox, round 2 resumes the round 1 thread by id): review runs on your ChatGPT subscription and does not consume your Claude limit. If Codex is unavailable, the Claude reviewer takes its role in the same mode — the pipeline does not stop.
+- **Models that do not go stale.** Defaults (today: Claude Opus 5.5 for the executors and the Claude reviewer, Fable as the fallback, Codex `gpt-6.1-sol` at `high`, `xhigh` on critical paths) are re-checked on every `init`/`upgrade`/`audit` against your local Codex catalog and Anthropic's official pages; the deployed pipeline prints `MODEL_WARN` when Codex marks the review model as older or retiring.
+- **Tool installation by consent.** If the Codex CLI or rembg is missing, the skill shows the exact commands, asks, and installs only what you tick. Nothing is ever installed silently.
 - **Assets for UI projects** (optional): image generation through the Codex CLI with the `codex-image.sh` wrapper, and background removal through the [rembg](https://github.com/croef/rembg-mcp) MCP server.
 - **`AGENTS.md` as the shared source of rules.** `CLAUDE.md` imports it with an `@AGENTS.md` line and Codex reads it natively — project rules live in one place for every agent.
 - **Speaks your language.** Everything ships in English. The skill talks to you in the language you write in, and detects the language of your repository (docs, state files, commit messages) to write the generated prompts and sections in it — it asks only when the signals disagree.
@@ -71,7 +71,7 @@ The `strict` and `light` profiles shift this scale up or down. Round 2 happens o
 
 - [Claude Code](https://claude.com/claude-code); `git`, `jq`, `python3`.
 - macOS or Linux (the scripts are bash; not tested on Windows).
-- For Codex review: `node` ≥ 18.18, the `codex@openai-codex` plugin, and the Codex CLI logged in (a ChatGPT subscription works). Without Codex, the pipeline runs on the Claude reviewer.
+- For Codex review: the Codex CLI logged in (a ChatGPT subscription works). Without Codex, the pipeline runs on the Claude reviewer.
 - Optional: the Codex `image_generation` feature and the `rembg` MCP server (Python ≥ 3.10) — for the Assets block.
 
 The skill offers to install whatever is missing; `codex login` is always left to you. Detection and installation commands are in [reference/tools.md](reference/tools.md).

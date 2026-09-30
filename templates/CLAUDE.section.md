@@ -38,7 +38,7 @@ model is changed only in `review-tier.sh`. The marker `[review: Rn]` in the task
 spawned only by a confirmed S1/S2; S3/S4 — fix-in-place, an item in `CHORES-<block>` or won't
 fix; subtasks from review — with `⏸️` until the owner's triage.
 
-Codex is called through the Claude Code plugin `codex@openai-codex` (the `codex` MCP server is no longer supported, 2026-09): `codex-reviewer` calls the wrapper `.claude/scripts/codex-review.sh`, and it calls the plugin's runner `codex-companion.mjs task` (read-only, in the background, waiting in chunks of ≤ 9 min against the 10 min limit of a Bash call; `PENDING job=<id>` → `wait <id>`; round 2 continues the round 1 thread via `--resume-thread`). Required: the installed plugin, the `codex` CLI and a login (`/codex:setup` shows readiness; the configuration is per-user, not per-repository). Without them the wrapper prints `### Verdict: UNAVAILABLE`, and `reviewer` takes the Codex role.
+Codex is called through the Codex CLI: `codex-reviewer` calls the wrapper `.claude/scripts/codex-review.sh`, and it runs `codex exec` (read-only sandbox, detached from the call, waiting in chunks of ≤ 9 min against the 10 min limit of a Bash call; `PENDING job=<id>` → `wait <id>`, `cancel <id>` stops it; round 2 continues the round 1 thread by id via `--resume-thread` → `codex exec resume`). Required: the `codex` CLI and a login (`bash .claude/scripts/codex-review.sh check` shows readiness; the configuration is per-user, not per-repository). Without them the wrapper prints `### Verdict: UNAVAILABLE`, and `reviewer` takes the Codex role.
 
 {{ASSET_SECTION}}
 

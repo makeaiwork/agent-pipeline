@@ -1,62 +1,61 @@
 #!/bin/bash
-# Regression test for the codex-review.sh wrapper — no live Codex: a stub (CODEX_COMPANION) is
-# substituted for the plugin runner; it writes the arguments it receives to a log and returns
-# canned answers. Run: bash .claude/scripts/codex-review.test.sh
+# Regression test for the codex-review.sh wrapper — no live Codex: a stub (CODEX_BIN) is substituted
+# for the `codex` CLI; it writes the arguments it receives to a log and returns canned JSONL events.
+# Run: bash .claude/scripts/codex-review.test.sh
 
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="$HERE/codex-review.sh"
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/codex-review-test.XXXXXX")
-STUB="$TMP/stub-companion.mjs"
+TMP=$(cd "$TMP" && pwd -P)
+STUB="$TMP/codex"
 LOG="$TMP/calls.log"
+export CODEX_REVIEW_JOBS="$TMP/jobs"
 FAIL=0
 
 cat > "$STUB" <<'EOS'
-import fs from "node:fs";
-const [cmd, ...rest] = process.argv.slice(2);
-const log = process.env.STUB_LOG;
-const mode = process.env.STUB_MODE || "ok";
-fs.appendFileSync(log, `${cmd} ${rest.join(" ")}\n`);
-const opt = (name) => { const i = rest.indexOf(name); return i >= 0 ? rest[i + 1] : null; };
-if (cmd === "setup") {
-  // as in the plugin: ready=false both when the CLI is missing and when the shared broker is busy
-  const available = mode !== "no-cli";
-  const ready = available && mode !== "broker-busy";
-  console.log(JSON.stringify({ ready, codex: { available }, auth: { loggedIn: ready, detail: mode === "broker-busy" ? "Shared Codex broker is busy." : "" } }));
-  process.exit(0);
-}
-if (cmd === "task-resume-candidate") {
-  const available = mode !== "no-candidate";
-  console.log(JSON.stringify({ available, candidate: available ? { id: "task-prev", threadId: "thread-A" } : null }));
-  process.exit(0);
-}
-if (cmd === "task") {
-  const promptFile = opt("--prompt-file");
-  fs.appendFileSync(log, `PROMPT<<${fs.readFileSync(promptFile, "utf8")}>>\n`);
-  if (mode === "launch-fail") { console.error("boom: codex exploded"); process.exit(1); }
-  if (mode === "resume-fail" && rest.includes("--resume-last")) { console.error("Task task-x is still running."); process.exit(1); }
-  if (mode === "node-warning") { console.error("(node:1) ExperimentalWarning: something"); }
-  // as in the plugin: --resume-last resumes the candidate's thread (thread-A), --fresh opens a new one (thread-B)
-  fs.writeFileSync(log + ".resumed", rest.includes("--resume-last") ? "1" : "0");
-  console.log(JSON.stringify({ jobId: "task-stub-1", status: "queued" })); process.exit(0);
-}
-if (cmd === "status") {
-  const status = mode === "pending" ? "running" : mode === "failed" ? "failed" : mode === "cancelled" ? "cancelled" : "completed";
-  console.log(JSON.stringify({ job: { id: rest[0], status }, waitTimedOut: mode === "pending" })); process.exit(0);
-}
-if (cmd === "result") {
-  if (mode === "result-fail") { console.error("result: job payload missing"); process.exit(1); }
-  const tid = fs.existsSync(log + ".resumed") && fs.readFileSync(log + ".resumed", "utf8") === "1" ? "thread-A" : "thread-B";
-  if (rest.includes("--json")) { console.log(JSON.stringify({ job: { id: rest[0], threadId: tid }, storedJob: { threadId: tid } })); process.exit(0); }
-  console.log(`### Verdict: APPROVE\n\n### Findings\n\n- none\n\nCodex session ID: ${tid}\nResume in Codex: codex resume ${tid}`); process.exit(0);
-}
-process.exit(3);
+#!/bin/bash
+mode="${STUB_MODE:-ok}"
+case "$1" in
+  --version) [ "$mode" = "no-version" ] && exit 1; echo "codex-cli 9.9.9"; exit 0 ;;
+  login) [ "$mode" = "no-login" ] && { echo "Not logged in"; exit 1; }; echo "Logged in using ChatGPT"; exit 0 ;;
+esac
+echo "ARGS $*" >> "$STUB_LOG"
+echo "PWD $(pwd -P)" >> "$STUB_LOG"
+resume=""; out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    resume) resume="$2"; shift 2 ;;
+    -o) out="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+printf 'PROMPT<<%s>>\n' "$(cat)" >> "$STUB_LOG"
+case "$mode" in
+  hang) exec sleep 30 ;;
+  slow) sleep 3 ;;
+  no-login) echo "Error: not logged in" >&2; exit 1 ;;
+  resume-fail) [ -n "$resume" ] && { echo "Error: thread/resume failed: no rollout found for thread id $resume" >&2; exit 1; } ;;
+esac
+tid="${resume:-thread-B}"
+echo "{\"type\":\"thread.started\",\"thread_id\":\"$tid\"}"
+case "$mode" in
+  turn-failed) echo '{"type":"turn.failed","error":{"message":"The model is not supported when using Codex with a ChatGPT account."}}'; exit 1 ;;
+  empty) echo '{"type":"turn.completed"}'; exit 0 ;;
+esac
+printf '### Verdict: APPROVE\n\n### Findings\n\n- none\n' > "$out"
+echo '{"type":"turn.completed"}'
 EOS
+chmod +x "$STUB"
 
 run_wrapper() { # mode, args...
   local mode="$1"; shift
-  : > "$LOG"; rm -f -- "$LOG.resumed"
-  printf 'Prompt\nsecond line\n' | CODEX_COMPANION="$STUB" STUB_LOG="$LOG" STUB_MODE="$mode" bash "$SCRIPT" run --cwd "$TMP" "$@" 2>&1
+  : > "$LOG"
+  printf 'Prompt\nsecond line\n' | CODEX_BIN="$STUB" STUB_LOG="$LOG" STUB_MODE="$mode" bash "$SCRIPT" run --cwd "$TMP" "$@" 2>&1
+}
+wrapper() { # mode, args... — any subcommand, no stdin
+  local mode="$1"; shift
+  CODEX_BIN="$STUB" STUB_LOG="$LOG" STUB_MODE="$mode" bash "$SCRIPT" "$@" </dev/null 2>&1
 }
 
 check() { # name, output, expected-substring
@@ -67,24 +66,33 @@ M="--model gpt-test --effort high"
 
 check "happy path"                               "$(run_wrapper ok $M)"            "### Verdict: APPROVE"
 check "threadId as the last line"                "$(run_wrapper ok $M | tail -1)"  "threadId: thread-B"
-check "pending → wait command"                   "$(run_wrapper pending $M)"       "PENDING job=task-stub-1"
-check "job failed → UNAVAILABLE"                 "$(run_wrapper failed $M)"        "### Verdict: UNAVAILABLE"
-check "job cancelled → UNAVAILABLE"              "$(run_wrapper cancelled $M)"     "status 'cancelled'"
-check "no codex CLI → UNAVAILABLE"               "$(run_wrapper no-cli $M)"        "codex CLI not found"
-check "launch failed → UNAVAILABLE with stderr"  "$(run_wrapper launch-fail $M)"   "codex exploded"
-check "result failed on completed → UNAVAILABLE" "$(run_wrapper result-fail $M)"   "result returned no report"
-check "a Node warning does not break the launch" "$(run_wrapper node-warning $M)"  "### Verdict: APPROVE"
+check "job id printed first"                     "$(run_wrapper ok $M | head -1)"  "job=cr-"
+check "turn failed → UNAVAILABLE with the reason" "$(run_wrapper turn-failed $M)"  "not supported when using Codex"
+check "no login → UNAVAILABLE with a hint"       "$(run_wrapper no-login $M)"      "not logged in"
+check "no final message → UNAVAILABLE"           "$(run_wrapper empty $M)"         "without a final message"
 
-# busy broker: ready=false, but the CLI is present → the job is launched anyway
-out=$(run_wrapper broker-busy $M)
-if printf '%s' "$out" | grep -qF "### Verdict: APPROVE" && grep -q '^task ' "$LOG"; then echo "PASS: a busy broker does not yield a false UNAVAILABLE"; else echo "FAIL: busy broker:"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
-
-# runner arguments: read-only (no --write), model/effort from the arguments, the prompt passed in full
+# exec arguments: read-only sandbox, approvals off, model/effort from the arguments, JSON events,
+# no resume, no bypass flags; runs in --cwd; the prompt passed in full
 run_wrapper ok --model gpt-x --effort xhigh >/dev/null
-if grep -q '^task .*--background .*--fresh .*--model gpt-x .*--effort xhigh .*--prompt-file' "$LOG" && ! grep -q -- '--write' "$LOG" \
-   && grep -q 'PROMPT<<Prompt' "$LOG" && grep -q '^second line' "$LOG"; then
-  echo "PASS: task arguments (read-only, model/effort from the arguments, prompt from stdin)"
-else echo "FAIL: task arguments:"; sed 's/^/    /' "$LOG"; FAIL=1; fi
+if grep -qF 'ARGS exec --skip-git-repo-check -m gpt-x -c model_reasoning_effort="xhigh" -c sandbox_mode="read-only" -c approval_policy="never" --json -o ' "$LOG" \
+   && ! grep -q 'resume\|dangerously\|--write' "$LOG" && grep -qxF "PWD $TMP" "$LOG" \
+   && grep -q 'PROMPT<<Prompt' "$LOG" && grep -q '^second line>>' "$LOG"; then
+  echo "PASS: exec arguments (read-only, approvals off, model/effort from the arguments, cwd, prompt from stdin)"
+else echo "FAIL: exec arguments:"; sed 's/^/    /' "$LOG"; FAIL=1; fi
+
+# pending → PENDING with the wait command; `wait <id>` in a later call collects the result
+out=$(run_wrapper slow $M --wait-ms 1000)
+job=$(printf '%s\n' "$out" | sed -n 's/^PENDING job=\([^ ]*\).*/\1/p')
+if [ -n "$job" ]; then
+  echo "PASS: pending → PENDING job=<id>"
+  check "wait <job-id> collects the result" "$(wrapper slow wait "$job" --cwd "$TMP")" "threadId: thread-B"
+else echo "FAIL: pending:"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
+
+# cancel: a hanging job is stopped, a later wait reports it as failed
+out=$(run_wrapper hang $M --wait-ms 1000)
+job=$(printf '%s\n' "$out" | sed -n 's/^PENDING job=\([^ ]*\).*/\1/p')
+check "cancel <job-id>" "$(wrapper hang cancel "$job")" "cancelled"
+check "wait after cancel → UNAVAILABLE" "$(wrapper hang wait "$job" --wait-ms 5000)" "### Verdict: UNAVAILABLE"
 
 # --prompt-file: prompt from the file (with `git diff` in backticks), stdin is not read, the caller's file stays
 PD="$TMP/artifacts/codex-prompts"; mkdir -p "$PD"
@@ -92,8 +100,8 @@ PF="$PD/T-1-review.md"
 printf 'Prompt from a file: `git diff HEAD -- README.md`\n' > "$PF"
 run_pf() { # mode, prompt-file, args... — stdin carries a decoy that must not reach the prompt
   local mode="$1" pf="$2"; shift 2
-  : > "$LOG"; rm -f -- "$LOG.resumed"
-  printf 'stdin-must-not-leak\n' | CODEX_COMPANION="$STUB" STUB_LOG="$LOG" STUB_MODE="$mode" bash "$SCRIPT" run --cwd "$TMP" $M --prompt-file "$pf" "$@" 2>&1
+  : > "$LOG"
+  printf 'stdin-must-not-leak\n' | CODEX_BIN="$STUB" STUB_LOG="$LOG" STUB_MODE="$mode" bash "$SCRIPT" run --cwd "$TMP" $M --prompt-file "$pf" "$@" 2>&1
 }
 out=$(run_pf ok "$PF")
 if printf '%s' "$out" | grep -qF "### Verdict: APPROVE" && grep -qF 'PROMPT<<Prompt from a file: `git diff HEAD -- README.md`' "$LOG" \
@@ -103,7 +111,7 @@ else echo "FAIL: --prompt-file:"; printf '%s\n' "$out" | sed 's/^/    /'; sed 's
 
 # --prompt-file + --resume-thread (the working call of mode: verify) → the thread is resumed with the prompt from the file
 out=$(run_pf ok "$PF" --resume-thread thread-A)
-if grep -q '^task .*--resume-last' "$LOG" && grep -qF 'PROMPT<<Prompt from a file' "$LOG" && printf '%s' "$out" | grep -qF "### Verdict: APPROVE"; then
+if grep -q '^ARGS exec resume thread-A ' "$LOG" && grep -qF 'PROMPT<<Prompt from a file' "$LOG" && printf '%s' "$out" | grep -qF "threadId: thread-A"; then
   echo "PASS: --prompt-file + --resume-thread"
 else echo "FAIL: --prompt-file + --resume-thread:"; printf '%s\n' "$out" | sed 's/^/    /'; sed 's/^/    /' "$LOG"; FAIL=1; fi
 
@@ -111,7 +119,7 @@ else echo "FAIL: --prompt-file + --resume-thread:"; printf '%s\n' "$out" | sed '
 printf 'x\n' > "$TMP/outside.md"
 for bad in "$TMP/outside.md" "$PD/../../outside.md" "$PD/nope.md" "$PD/T-1-review.txt"; do
   out=$(run_pf ok "$bad"); rc=$?
-  if [ $rc -eq 2 ] && ! grep -q '^task ' "$LOG"; then echo "PASS: --prompt-file rejected: ${bad#$TMP/}"; else echo "FAIL: --prompt-file ${bad#$TMP/} (rc=$rc): $out"; FAIL=1; fi
+  if [ $rc -eq 2 ] && ! grep -q '^ARGS ' "$LOG"; then echo "PASS: --prompt-file rejected: ${bad#$TMP/}"; else echo "FAIL: --prompt-file ${bad#$TMP/} (rc=$rc): $out"; FAIL=1; fi
 done
 
 # --prompt-file empty or unreadable → UNAVAILABLE, exit 0
@@ -122,42 +130,37 @@ if [ -r "$PD/locked.md" ]; then echo "SKIP: unreadable file (running as root)"
 else check "--prompt-file unreadable → UNAVAILABLE" "$(run_pf ok "$PD/locked.md")" "could not read --prompt-file"; fi
 chmod 600 "$PD/locked.md"
 
-# round 2: the thread matches the last one → --resume-last, no --fresh, no note
+# round 2: resume by id — the same thread, one launch, no note
 out=$(run_wrapper ok $M --resume-thread thread-A)
-if grep -q '^task .*--resume-last' "$LOG" && ! grep -q -- '--fresh' "$LOG" && ! printf '%s' "$out" | grep -q 'not resumed' && printf '%s' "$out" | grep -qF "### Verdict: APPROVE"; then
-  echo "PASS: resume-thread matched → thread resumed"
-else echo "FAIL: resume-thread matched:"; printf '%s\n' "$out" | sed 's/^/    /'; sed 's/^/    /' "$LOG"; FAIL=1; fi
+if [ "$(grep -c '^ARGS ' "$LOG")" = "1" ] && grep -q '^ARGS exec resume thread-A ' "$LOG" && ! printf '%s' "$out" | grep -q 'not resumed' \
+   && [ "$(printf '%s\n' "$out" | tail -1)" = "threadId: thread-A" ]; then
+  echo "PASS: resume-thread → thread resumed by id"
+else echo "FAIL: resume-thread:"; printf '%s\n' "$out" | sed 's/^/    /'; sed 's/^/    /' "$LOG"; FAIL=1; fi
 
-# round 2: the thread does not match → a new thread and the note as the first line
-out=$(run_wrapper ok $M --resume-thread thread-Z)
-if grep -q '^task .*--fresh' "$LOG" && ! grep -q -- '--resume-last' "$LOG" && [ "$(printf '%s\n' "$out" | head -1 | cut -c1-30)" = "Round 1 thread not resumed: th" ]; then
-  echo "PASS: resume-thread did not match → new thread with the note"
-else echo "FAIL: resume-thread did not match:"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
-
-# round 2: no candidate → a new thread with the note
-out=$(run_wrapper no-candidate $M --resume-thread thread-A)
-check "resume-thread with no candidate → new thread" "$out" "Round 1 thread not resumed"
-
-# round 2: --resume-last failed (another job is running) → a new thread with the note, not UNAVAILABLE
+# round 2: the resume failed (thread not found) → a new thread with the note, not UNAVAILABLE
 out=$(run_wrapper resume-fail $M --resume-thread thread-A)
-if printf '%s' "$out" | grep -q 'not resumed' && printf '%s' "$out" | grep -qF "### Verdict: APPROVE" && grep -q '^task .*--fresh' "$LOG"; then
-  echo "PASS: resume-last failed → fallback to a new thread"
-else echo "FAIL: resume-last failed:"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
+if printf '%s' "$out" | grep -q '^Round 1 thread not resumed: .*no rollout found' && printf '%s' "$out" | grep -qF "### Verdict: APPROVE" \
+   && [ "$(grep -c '^ARGS ' "$LOG")" = "2" ] && [ "$(printf '%s\n' "$out" | tail -1)" = "threadId: thread-B" ]; then
+  echo "PASS: resume failed → fallback to a new thread"
+else echo "FAIL: resume failed:"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
 
-# wait: waiting again by job-id
-: > "$LOG"
-out=$(CODEX_COMPANION="$STUB" STUB_LOG="$LOG" STUB_MODE=ok bash "$SCRIPT" wait task-stub-1 --cwd "$TMP" 2>&1)
-if printf '%s' "$out" | grep -qF "### Verdict: APPROVE" && grep -q '^status task-stub-1 .*--wait' "$LOG"; then echo "PASS: wait <job-id>"; else echo "FAIL: wait <job-id>:"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
+# check: ready with CLI and login; not logged in → ready=false
+check "check: ready"                             "$(wrapper ok check | jq -r .ready)"        "true"
+check "check: not logged in → ready=false"       "$(wrapper no-login check | jq -r .ready)"  "false"
 
-# argument validation: no --model, invalid effort, a flag without a value — exit code 2 before launch
+# argument validation: no --model, effort outside the set, a flag without a value, a foreign job id — exit code 2 before launch
 if run_wrapper ok --effort high >/dev/null; then echo "FAIL: a call without --model must be rejected"; FAIL=1; else echo "PASS: --model is required"; fi
-if run_wrapper ok --model gpt-x --effort max >/dev/null; then echo "FAIL: effort=max must be rejected"; FAIL=1; else echo "PASS: effort only from the plugin's set"; fi
+if run_wrapper ok --model gpt-x --effort ultra >/dev/null; then echo "FAIL: effort=ultra must be rejected"; FAIL=1; else echo "PASS: effort=ultra rejected"; fi
+check "effort=max accepted"                      "$(run_wrapper ok --model gpt-x --effort max)" "### Verdict: APPROVE"
 out=$(run_wrapper ok --model gpt-x --effort); rc=$?
 if [ $rc -eq 2 ] && printf '%s' "$out" | grep -qF "value required"; then echo "PASS: flag without a value"; else echo "FAIL: flag without a value (rc=$rc): $out"; FAIL=1; fi
+out=$(wrapper ok wait ../../etc); rc=$?
+if [ $rc -eq 2 ]; then echo "PASS: wait rejects a foreign job id"; else echo "FAIL: wait with a foreign job id (rc=$rc): $out"; FAIL=1; fi
+check "wait for an unknown job → UNAVAILABLE"    "$(wrapper ok wait cr-1-2-3)"               "no Codex job cr-1-2-3"
 
-# plugin not found → UNAVAILABLE, exit code 0
-out=$(printf 'x\n' | CODEX_COMPANION="$TMP/nope.mjs" bash "$SCRIPT" run --cwd "$TMP" $M 2>&1); rc=$?
-if [ $rc -eq 0 ] && printf '%s' "$out" | grep -qF "### Verdict: UNAVAILABLE"; then echo "PASS: plugin not found → UNAVAILABLE"; else echo "FAIL: plugin not found (rc=$rc):"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
+# CLI not found → UNAVAILABLE, exit code 0
+out=$(printf 'x\n' | CODEX_BIN="$TMP/nope" bash "$SCRIPT" run --cwd "$TMP" $M 2>&1); rc=$?
+if [ $rc -eq 0 ] && printf '%s' "$out" | grep -qF "### Verdict: UNAVAILABLE"; then echo "PASS: CLI not found → UNAVAILABLE"; else echo "FAIL: CLI not found (rc=$rc):"; printf '%s\n' "$out" | sed 's/^/    /'; FAIL=1; fi
 
-rm -r -- "$TMP"
+rm -rf -- "$TMP"
 [ $FAIL -eq 0 ] && echo "ALL PASS" || { echo "FAILURES"; exit 1; }

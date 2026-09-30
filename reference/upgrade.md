@@ -67,8 +67,8 @@ Rule: in the interview "**Recommended for this project: <current> — because th
 in `<file>:<line>`**". The current value contradicts a `knobs.md` rule (for example, `light` with
 money in A1 or `sonnet` for `coder` on domain logic) → recommend per `knobs.md`, give the current
 value as the second option labelled "current". The same for models: a current `CODEX_MODEL`,
-`CODEX_EFFORT_*` or role `model:` that `knobs.md` E flags (a missing, retiring or "Older" Codex
-model, an effort the plugin rejects, a Claude family that is no longer the leader, a fallback equal
+`CODEX_EFFORT_*` or role `model:` that `knobs.md` E flags (a missing, retiring, "Older" or "Previous" Codex
+model, an effort the wrapper rejects, a Claude family that is no longer the leader, a fallback equal
 to the primary) is not recommended just because it is set now — recommend by the E leader rule and
 give the current value as "current", with the reason from E ("`gpt-5.6-sol` is marked Older in the
 catalog fetched <date>"). A value that is neither in the files nor given by a

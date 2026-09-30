@@ -37,7 +37,7 @@ one model. Guideline: ≤10 globs.
 
 | Option | + | − |
 | --- | --- | --- |
-| **Codex primary + Claude reader (`opus`) on double review** | Codex runs on its own subscription — the Claude limit is not spent; a second independent look where a mistake is expensive; the reader is the strongest and cheaper Claude family (E) | needs the `codex` CLI and the `codex@openai-codex` plugin; two subscriptions |
+| **Codex primary + Claude reader (`opus`) on double review** | Codex runs on its own subscription — the Claude limit is not spent; a second independent look where a mistake is expensive; the reader is the strongest and cheaper Claude family (E) | needs the `codex` CLI with a login; two subscriptions |
 | Codex primary + Claude reader on **Fable** | the reader is a different model from the one that wrote the code (`coder` is on `opus`) — different blind spots | 2.5× the price of Opus, the Fable limit runs out sooner (it did on 2026-08-26); below Opus 5.5 on agentic benchmarks (E) |
 | Claude only (no Codex) | one subscription, nothing to install | one model sees its own blind spots (writer and reviewer are the same family); every review eats the Claude limit |
 | Codex only | minimum of Claude calls | on `R3` there is no second independent reader and no arbiter |
@@ -46,36 +46,36 @@ Inside the choice:
 
 - **Codex model** — the catalogue is `~/.codex/models_cache.json`, the owner's current choice is
   `~/.codex/config.toml` (`model =`); both are checked for freshness per section E. Options:
-  `gpt-6-sol` (default: the catalogue's coding workhorse, half the price of `gpt-5.6-sol`) ·
+  `gpt-6.1-sol` (default: "Latest workhorse model for coding" in the catalogue since 2026-09-30) ·
+  `gpt-6-sol` (flagged "Previous generation" since 2026-09-30; the default 2026-09-23..30) ·
   `gpt-6-astra` (frontier; more Codex quota per review; in the second source repo since 05.09.2026,
   flat `high`) · `gpt-5.6-sol` (older; half a year of runs in the first repo, `high`/`xhigh` by
   tier) · whatever else the catalogue lists. Recommendation: the owner's `config.toml` model, unless
-  section E flags it (missing, retiring, "Older"/"Legacy"); flagged → the current coding model by
-  the E leader rule (today `gpt-6-sol`), the owner's value as the second option labelled "current".
+  section E flags it (missing, retiring, "Older"/"Legacy"/"Previous"); flagged → the current coding model by
+  the E leader rule (today `gpt-6.1-sol`), the owner's value as the second option labelled "current".
   The recommended model must be in the catalogue at reconnaissance time — a rollout may not have
   reached this account yet.
 - **Codex effort** (`CODEX_EFFORT_R12` / `CODEX_EFFORT_R3`): `high`/`xhigh` by tier (default; the
   first repo's scheme: the depth goes where a mistake is expensive, small tasks stay fast) · flat
-  `xhigh` (on `gpt-6-sol`, half the price of `gpt-5.6-sol`, it costs about what `high`/`xhigh` did;
-  − every R1 review takes longer) · flat `high` (the second repo; cheapest, no margin on R3). The
-  `codex@openai-codex` plugin 1.0.6 does not accept `max`/`ultra` (the set is
-  `none|minimal|low|medium|high|xhigh`, even where the catalogue lists more; section E re-checks
-  it); `ultra` is also unsuitable by design: it delegates subtasks on its own, so review time
-  becomes unpredictable.
+  `xhigh` (on `gpt-6-sol`, half the price of `gpt-5.6-sol`, it cost about what `high`/`xhigh` did there;
+  − every R1 review takes longer) · flat `high` (the second repo; cheapest, no margin on R3) · `max` on R3
+  (accepted since the wrapper calls the CLI directly, 2026-09-30; slower and more quota, not yet
+  compared with `xhigh` in `runs.log`). The wrapper accepts `low|medium|high|xhigh|max`; `ultra` is
+  refused by design: it delegates subtasks on its own, so review time becomes unpredictable.
 - **Claude reviewer model** (`reviewer.md` → `model:`): the primary Claude family of section E —
   `opus` (default) / `fable` (a different model from the coder's; more expensive).
   **Consolidator** (`review-consolidator.md`): `opus` (default; it reads two reports and
   spot-checks code) / `sonnet` (pet project).
 
-**Recommendation rule:** the `codex@openai-codex` plugin and the `codex` CLI with a login are
+**Recommendation rule:** the `codex` CLI with a login is
 present (detection — `tools.md` §2; by this question installation by consent has already been
 offered, look at the state after it) → option 1; Claude reviewer — the primary Claude family of
-section E (today `opus`). The plugin and CLI are installed but there is no login yet → still
+section E (today `opus`). The CLI is installed but there is no login yet → still
 option 1 with an `[OWNER]` item "`codex login`": until login the wrapper returns `UNAVAILABLE`, and
 `reviewer` takes the Codex role. The owner declined the installation or it failed → "Claude only"
 (`REVIEW_BACKEND=claude`: the script prints `CODEX=none`, `reviewer` takes all Codex slots, there is
-no double review and no consolidator) with an `[OWNER]` line "install the Codex CLI + the
-`codex@openai-codex` plugin (commands — `tools.md`); then `REVIEW_BACKEND=both`" in the report; the
+no double review and no consolidator) with an `[OWNER]` line "install the Codex CLI and
+log in (commands — `tools.md`); then `REVIEW_BACKEND=both`" in the report; the
 `codex-reviewer.md` template is installed anyway. "Codex only" — `REVIEW_BACKEND=codex`: there is no
 Claude reader, `double → single`, no consolidator.
 
@@ -169,7 +169,7 @@ that exist and were edited within the last 90 days (`git log --since`).
 | --- | --- | --- |
 | `autoCompactWindow` | `400000` | `settings.json` |
 | `fallbackModel` | `["__FALLBACK_MODEL__"]` → the fallback family from A4 (today `fable`) | `settings.json` |
-| `MCP_TOOL_TIMEOUT` | `1800000` (30 min; historically — for the Codex MCP, now Codex goes through the plugin and the `codex-review.sh` wrapper enforces the limit; kept for the playwright MCP) | `settings.json` → `env` |
+| `MCP_TOOL_TIMEOUT` | `1800000` (30 min; historically — for the Codex MCP, now Codex goes through the CLI and the `codex-review.sh` wrapper enforces the limit; kept for the playwright MCP) | `settings.json` → `env` |
 | `PLAYWRIGHT_MCP_ISOLATED` | `"true"` only with UI + Playwright MCP | `settings.json` → `env` |
 | `__STACK_ALLOW__` | allow list of the stack's commands: `npm/npx/node` · `pnpm` · `yarn` · `python/pip/pytest/uv` · `cargo` · `go` · `make`; from reconnaissance | `settings.json` → `permissions.allow` |
 | `{{TEST_TOOLS}}` | `Bash(<test cmd> *)` by stack (`Bash(npx vitest *)`, `Bash(pytest *)`, …) | `tester.md` → `tools:` |
@@ -298,23 +298,25 @@ Terminal-Bench 4.0 — below Fable 5.1). Checked on 2026-09-23: 2.1.267 → `cla
 transcript). The model and effort of any call are visible in its transcript
 (`~/.claude/projects/<dir>/<session>.jsonl`, fields `"model"` and `"effort"`).
 
-**Codex** — `~/.codex/models_cache.json` fetched 2026-09-23 by CLI 0.156.1:
+**Codex** — `codex debug models` of CLI 0.159.2 on 2026-09-30:
 
 | Slug | Catalogue description | Status |
 | --- | --- | --- |
-| `gpt-6-sol` | Workhorse model for coding and everyday work | default `CODEX_MODEL`; released 2026-09-22, $2/$10 in the API — half of `gpt-5.6-sol`; answered this account through CLI 0.156.1 on 2026-09-23; absent from the catalogue that the ChatGPT app's bundled codex 0.154.0 receives |
+| `gpt-6.1-sol` | Latest workhorse model for coding and everyday work | default `CODEX_MODEL` since 2026-09-30; answered this account through the plugin and through `codex exec` (CLI 0.159.2) at `low`, `high` and `max` on 2026-09-30; absent from the catalogue that the ChatGPT app's bundled codex 0.155.0 receives |
 | `gpt-6-astra` | Frontier intelligence for the most demanding work | the maximum option; more Codex quota per call |
+| `gpt-6-sol` | Previous generation workhorse model | flagged "Previous" — the default 2026-09-23..30; released 2026-09-22, $2/$10 in the API |
 | `gpt-6-luna` | Fast and affordable model for easier tasks | not for review |
-| `gpt-5.6-sol` | Older coding model for complex work | flagged "Older" — the previous default |
-| `gpt-5.5` | Legacy coding model | retires 2026-10-14 (successor `gpt-5.6-sol`) |
+| `gpt-5.6-sol` | Older generation workhorse model | flagged "Older" |
+| `gpt-5.5` | Legacy coding model | retires 2026-10-14 |
 
-The `codex@openai-codex` plugin 1.0.6 accepts effort `none|minimal|low|medium|high|xhigh`; `max`
-and `ultra` are rejected even though the catalogue lists them.
+`codex-review.sh` accepts effort `low|medium|high|xhigh|max` (the `codex@openai-codex` plugin, the
+path until 2026-09-30, stopped at `xhigh`); `ultra` is refused by design.
 
 **Proven in the pipeline: not yet.** Opus 5.5 and `gpt-6-sol` became defaults the day after release,
-on vendor figures, not on runs. After ~20 tasks compare `rounds=`, `found=`, `verdict=` in
-`.claude/state/runs.log` with the lines before the switch: more second rounds, or S1/S2 that only one
-reviewer finds → consider `fable` for `coder`/`reviewer` or Codex flat `xhigh`.
+and `gpt-6.1-sol` replaced `gpt-6-sol` a week later, on vendor figures, not on runs. After ~20
+tasks compare `rounds=`, `found=`, `verdict=` in `.claude/state/runs.log` with the lines before the
+switch: more second rounds, or S1/S2 that only one reviewer finds → consider `fable` for
+`coder`/`reviewer` or Codex flat `xhigh`.
 
 Sources: <https://www.anthropic.com/claude-opus-5-5> ·
 <https://www.anthropic.com/claude-fable-and-mythos-5-1> ·
@@ -326,20 +328,24 @@ Sources: <https://www.anthropic.com/claude-opus-5-5> ·
 C=~/.codex/models_cache.json
 jq -r '"fetched_at=\(.fetched_at) client=\(.client_version)"' "$C"
 jq -r '.models[] | select(.visibility=="list") | [.slug, .description, (.upgrade.retirement_at // "-"), ([.supported_reasoning_levels[]?.effort] | join(","))] | @tsv' "$C"
-grep -ho 'VALID_REASONING_EFFORTS = new Set(\[[^]]*\])' ~/.claude/plugins/cache/openai-codex/codex/*/scripts/codex-companion.mjs | tail -1
+grep -o 'low|medium|high|xhigh[|a-z]*' .claude/scripts/codex-review.sh | head -1   # the wrapper's effort set (in upgrade/audit)
+codex debug models | jq -r '.models[] | select(.visibility=="list") | .slug'        # the catalogue of the CLI on PATH itself
 ```
 
 A model is **flagged** when it is missing from the catalogue, has an `upgrade` field (retirement
-date, successor), or its description starts with "Older"/"Legacy". An effort is flagged when the
-plugin's set or the model's `supported_reasoning_levels` lacks it. These are the same rules as
+date, successor), or its description starts with "Older"/"Legacy"/"Previous". An effort is flagged when the
+wrapper's set or the model's `supported_reasoning_levels` lacks it. These are the same rules as
 `MODEL_WARN=`. Check three values: the template default, the owner's `config.toml` `model`, and (in
 `upgrade`/`audit`) the repo's `CODEX_MODEL`/`CODEX_EFFORT_*`. Every Codex client on the machine (the
 CLI, the ChatGPT app, the IDE extension) rewrites the same catalogue, and the server sends an older
 client a shorter list: on 2026-09-23 the app's codex 0.154.0 got no GPT-6 models while CLI 0.156.1
-did. The plugin runs the `codex` on PATH, so "missing" counts only when `client_version` in the
+did (and on 2026-09-30 the app's codex 0.155.0 got no `gpt-6.1-sol` while CLI 0.159.2 did). The
+wrapper runs the `codex` on PATH, so "missing" counts only when `client_version` in the
 catalogue is not older than `codex --version`; `MODEL_WARN=` applies the same rule. Show
-`fetched_at` and `client_version` in the table. If the plugin's set grows beyond `xhigh`, the
-`case` in `codex-review.sh` and the A2 effort text must be updated before a higher effort is offered.
+`fetched_at` and `client_version` in the table; when the file was written by an older client,
+take the list from `codex debug models` — the catalogue of the CLI on PATH, not rewritten by other
+clients. A new effort level in the catalogue is offered only after the `case` in `codex-review.sh`
+and the A2 effort text are updated.
 
 ### 3. Claude check — network
 
@@ -371,9 +377,9 @@ owner: "update `knobs.md` E in the skill repository".
   `researcher` and `review-consolidator` — `opus`, unless Opus stops being the cheaper of the two
   strong families. `tester`, `committer`, `codex-reviewer` — `sonnet`.
 - **Codex** — `CODEX_MODEL` is the newest unflagged model whose description names coding as its
-  purpose (today `gpt-6-sol`). Frontier models (`gpt-6-astra`) are offered only as an explicit
-  option, because of the quota. Effort — by tier: `high` on R1/R2, the highest the plugin accepts
-  on R3 (today `xhigh`).
+  purpose (today `gpt-6.1-sol`). Frontier models (`gpt-6-astra`) are offered only as an explicit
+  option, because of the quota. Effort — by tier: `high` on R1/R2, `xhigh` on R3 (`max` is an
+  explicit option until `runs.log` shows `xhigh` missing S1/S2 on R3).
 - A flagged current value (the owner's `config.toml`, the repo's files) never becomes the
   recommendation: recommend by this rule and give the current value as the second option labelled
   "current" (`upgrade.md` §2).

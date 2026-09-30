@@ -10,10 +10,10 @@ both modes, §9 is upgrade only.
 bash .claude/hooks/safety-check.test.sh        # expected passed: 86, failed: 0
 bash .claude/hooks/agent-sync-check.test.sh    # 20/20
 bash .claude/hooks/codex-prompt-write-guard.test.sh   # pass=31 fail=0
-bash .claude/scripts/review-tier.test.sh       # PASS=78 FAIL=0 (the test builds the profile and backend variants itself; interview constants have no effect)
+bash .claude/scripts/review-tier.test.sh       # PASS=95 FAIL=0 (the test builds the profile and backend variants itself; interview constants have no effect)
 bash .claude/scripts/active-session.test.sh    # 34/34
 bash .claude/scripts/task-commit.test.sh       # 19/19
-bash .claude/scripts/codex-review.test.sh      # ALL PASS (the Codex wrapper on a stub of the plugin runner; Codex itself is not needed)
+bash .claude/scripts/codex-review.test.sh      # ALL PASS (the Codex wrapper on a stub of the codex CLI; Codex itself is not needed)
 bash .claude/scripts/codex-image.test.sh       # ALL PASS (the image wrapper on a stub of the codex CLI; no quota is spent)
 ```
 
@@ -59,7 +59,7 @@ jq -r '.worktree.baseRef' .claude/settings.json    # head (or the chosen value)
 
 ```bash
 bash .claude/scripts/codex-review.sh check | jq '{ready, codex: .codex.detail, auth: .auth.detail}'
-                                                   # ready:true → codex-reviewer works; UNAVAILABLE block → the plugin is missing
+                                                   # ready:true → codex-reviewer works; UNAVAILABLE block → no codex CLI
 command -v codex && codex --version
 command -v python3 && command -v jq                # needed by the hooks and scripts
 # only when the "Assets" knob is enabled (do not run live generation here — it spends quota):
@@ -70,11 +70,11 @@ grep -c 'codex-image.sh\|mcp__rembg' .claude/agents/coder.md   # >0 when the kno
 
 The regression test of the wrapper itself (`codex-review.test.sh`) is in §1.
 
-No plugin or CLI → installation by consent was already offered in phase 1 (`tools.md`); if the owner
+No CLI or no login → installation by consent was already offered in phase 1 (`tools.md`); if the owner
 declined or it failed — put `[OWNER]` into the report with the commands from `tools.md` §2 and "log
-in (`codex login`); `/codex:setup` will show readiness. Until then `codex-reviewer` returns
-`UNAVAILABLE`, and `reviewer` takes its place in the same mode". The `codex` MCP server is no longer
-needed and is not supported.
+in (`codex login`); `bash .claude/scripts/codex-review.sh check` will show readiness. Until then `codex-reviewer` returns
+`UNAVAILABLE`, and `reviewer` takes its place in the same mode". Neither the `codex` MCP server nor
+the `codex@openai-codex` plugin is needed.
 
 ## 6. Dropbox-guard (only if the repo path contains `Dropbox`)
 

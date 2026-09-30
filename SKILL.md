@@ -59,11 +59,11 @@ Collect and show the owner ONE "found → proposed" table before any questions:
 7. **UI**: `client/`, `src/components`, `.tsx/.vue/.svelte`; Playwright (`playwright.config*`,
    MCP `playwright` in `claude mcp list`). UI present → the number of raster assets (`git ls-files | grep
    -cE '\.(png|jpe?g|webp)$'`) and the "Assets" knob (`knobs.md` B) — "⚠ will ask".
-8. **Owner's environment**: `command -v codex python3 jq node`; the Codex plugin, Codex CLI, the
+8. **Owner's environment**: `command -v codex python3 jq`; the Codex CLI and its login, the
    `image_generation` feature, MCP `rembg` — with the detection commands of `tools.md` §2 (the last
    two — only with UI from item 7); `~/.codex/config.toml` (`model`, `model_reasoning_effort`), the
    catalog `~/.codex/models_cache.json`; `pwd` contains `Dropbox`. **Model freshness** per
-   `knobs.md` E: the Codex catalog and the plugin's effort set (§2, local) and the Claude snapshot
+   `knobs.md` E: the Codex catalog and the wrapper's effort set (§2, local) and the Claude snapshot
    against Anthropic's official pages (§3, network) → a "Models" row in the table: "configured →
    status (current / flagged: why / snapshot stale) → proposed".
 9. **Signs of parallel agent sessions** (`AGENT_ID`, several DBs in compose) and of an external
@@ -73,8 +73,7 @@ Table format: one row per item — "what was found (file/value) → what will be
 (placeholder)". Mark anything ambiguous "⚠ will ask". Do not move on to the interview without this
 table (rule: explain first, then options).
 
-**Tools — right after the table, before the interview.** No `codex@openai-codex` plugin or Codex
-CLI → offer to install per `tools.md` §1: the commands and where they write — in the chat,
+**Tools — right after the table, before the interview.** No Codex CLI or no login → offer to install per `tools.md` §1: the commands and where they write — in the chat,
 consent — one `AskUserQuestion`, install only what was checked, afterwards — repeat detection and
 an updated table row (recommendation A2 depends on it). Refusal or installation failure — an
 `[OWNER]` line in the report, the interview goes on. rembg and `image_generation` are offered
@@ -174,7 +173,7 @@ From `SKILL_DIR/templates/` into the target repo, substitutions — per the phas
 
 Strictly per `SKILL_DIR/reference/verify.md` §1–§7: seven test matrices green, `review-tier.sh
 --task-id SMOKE-1` yields `TIER=R1` and `PROFILE=`, hooks block/print, worktree add/remove,
-`git check-ignore`, the `codex@openai-codex` plugin, Dropbox xattr, `grep '{{[A-Z_]*}}'` empty.
+`git check-ignore`, `codex-review.sh check`, Dropbox xattr, `grep '{{[A-Z_]*}}'` empty.
 Red — fix it (the template or the
 substitution) until green; the foreign tree is not changed in the process.
 
@@ -185,7 +184,7 @@ In the chat:
 1. A table of created/changed files with substitutions.
 2. An "accepted by default → where to switch" table (from `knobs.md` C).
 3. `[OWNER]` actions: from `tools.md` — what the owner declined to install or what failed to
-   install (with commands), `codex login`, `/reload-plugins` after installing the plugin;
+   install (with commands), `codex login`;
    `/autocompact 400k` in user scope if desired,
    a commit of `.claude/**` + `AGENTS.md`/`CLAUDE.md` + the state files (done by the owner or, at
    the owner's word, by `committer` with an explicit list of paths; subject `chore(pipeline): set up
@@ -318,7 +317,7 @@ present / absent / differs → `principles.md` section". Items:
 | 1   | A runner per task: an agent with `isolation: worktree`, `tools: Agent(<allow list>)`, report ≤15 lines                                                            | frontmatter of `.claude/agents/*.md`                                              |
 | 2   | The orchestrator is thin: `/do-all`/`/do-next`/`/status` (skills or commands), does not write state files, ff-merge                                               | command texts                                                                     |
 | 3   | The tier is decided by a script (`review-tier.*`), not an agent; it prints the Codex model/effort; the profile/lineup come from the script                        | `grep -n 'CODEX_MODEL\|ROUND1\|PLAN' .claude/scripts/*`; hardcoded model in agents |
-| 4   | Codex is the primary reviewer via the `codex@openai-codex` plugin (wrapper `codex-review.sh`); round 2 verifies in the same thread (`threadId`); `UNAVAILABLE` ≠ APPROVE | `codex-reviewer*.md`, `bash .claude/scripts/codex-review.sh check`                |
+| 4   | Codex is the primary reviewer via the Codex CLI (wrapper `codex-review.sh`, `codex exec` read-only); round 2 verifies in the same thread (`threadId`); `UNAVAILABLE` ≠ APPROVE | `codex-reviewer*.md`, `bash .claude/scripts/codex-review.sh check`                |
 | 5   | Double review in a single message, the consolidator checks only the disagreements; two rounds, the second is final                                                | `task-runner`, `review-consolidator` (in a hand-built setup they may be named differently — look for the consolidating role and the double-review skill) |
 | 6   | Fate of S3/S4: collector task/won't fix/`⏸️`; only S1/S2 spawns a task                                                                                            | runner prompts, `todo.md` header                                                  |
 | 7   | Hooks: `safety-check` (Bash), `agent-sync-check` (Agent), `codex-prompt-write-guard` (Write), `post-edit`, `pre-compact`, `session-start`, `notify`; registered in `settings.json`; tests green | `jq .hooks`, a run of `*.test.sh`                                                 |
@@ -330,8 +329,8 @@ present / absent / differs → `principles.md` section". Items:
 | 13  | A single bookkeeping writer; ≤1 commit per runner exit; ID in the subject; no auto-push                                                                           | prompts, `git log --format=%s -30`                                                |
 | 14  | Deliberate divergences (a task board instead of `todo.md` lines, task tiers, a value filter, telemetry in the repo, a context checkpoint, port slots)            | mark "deliberately absent", not as a defect (`principles.md` §10)                 |
 | 15  | Instruction files: `CLAUDE.md` imports `@AGENTS.md` (or is a symlink to it) — otherwise Claude Code does not see `AGENTS.md`: it is read natively since 2.1.277 and only without a `CLAUDE.md`; shared rules — in `AGENTS.md` (Codex reads the same file from cwd), in `CLAUDE.md` — only Claude specifics, no duplicates; the section marker — one per file; prompts do not require a separate Read of `AGENTS.md`; a nested `AGENTS.md` next to a `CLAUDE.md` without an import, `AGENTS.override.md`, `AGENTS.local.md`, `.agents/` — Claude does not read them; the `AGENTS.md` chain from the root to cwd ≤ 32 KiB (the Codex limit `project_doc_max_bytes`: beyond it the rules silently do not reach the reviewer); `pluginConfigs."agents-md@builtin"` in the project `settings.json` — a dead setting (it works only in user/managed) | `grep -cE '^@(\./)?AGENTS\.md' CLAUDE.md`, `test -L CLAUDE.md`, `grep -c 'agent-pipeline:begin' CLAUDE.md AGENTS.md`, `git ls-files '*AGENTS*.md' '*CLAUDE.md' .agents`, `wc -c AGENTS.md`, `jq .pluginConfigs .claude/settings.json`, `grep -rniE 'read .AGENTS|прочитай .AGENTS' .claude/` (`principles.md` §6) |
-| 16  | The owner's tools against what the config expects: `REVIEW_BACKEND≠claude` → the `codex@openai-codex` plugin, Codex CLI, login; `codex-image.sh` in the `tools:` of `coder` → `image_generation`; `mcp__rembg__*` in `tools:`/`allow` → MCP `rembg`. "Differs" — only when the config expects something absent; an extra installed tool is not a defect | the detection of `tools.md` §2, `bash .claude/scripts/codex-review.sh check`; into the report — the installation commands, audit itself installs nothing |
-| 17  | Model freshness (`knobs.md` E): `CODEX_MODEL`/`CODEX_EFFORT_*` of `review-tier.sh` against the Codex catalog and the plugin's effort set; `model:` of runner/coder/architect/reviewer against the leader rule, and the owner's Claude Code versions against the one the alias needs (`opus` = Opus 5.5 from 2.1.280); `fallbackModel` ≠ the runner's model and matches the fallback in the prompts. "Differs" — a flagged model or effort, a non-leader family without a recorded reason, fallback = primary | `knobs.md` E §2 commands; `claude --version`; `bash .claude/scripts/review-tier.sh` (a `MODEL_WARN=` line); `grep -n '^model:' .claude/agents/*.md`; `jq .fallbackModel .claude/settings.json`; `grep -rn 'model: "' .claude/agents/task-runner.md .claude/skills/do-all/SKILL.md` |
+| 16  | The owner's tools against what the config expects: `REVIEW_BACKEND≠claude` → the Codex CLI and a login; `codex-image.sh` in the `tools:` of `coder` → `image_generation`; `mcp__rembg__*` in `tools:`/`allow` → MCP `rembg`. "Differs" — only when the config expects something absent; an extra installed tool is not a defect | the detection of `tools.md` §2, `bash .claude/scripts/codex-review.sh check`; into the report — the installation commands, audit itself installs nothing |
+| 17  | Model freshness (`knobs.md` E): `CODEX_MODEL`/`CODEX_EFFORT_*` of `review-tier.sh` against the Codex catalog and the wrapper's effort set; `model:` of runner/coder/architect/reviewer against the leader rule, and the owner's Claude Code versions against the one the alias needs (`opus` = Opus 5.5 from 2.1.280); `fallbackModel` ≠ the runner's model and matches the fallback in the prompts. "Differs" — a flagged model or effort, a non-leader family without a recorded reason, fallback = primary | `knobs.md` E §2 commands; `claude --version`; `bash .claude/scripts/review-tier.sh` (a `MODEL_WARN=` line); `grep -n '^model:' .claude/agents/*.md`; `jq .fallbackModel .claude/settings.json`; `grep -rn 'model: "' .claude/agents/task-runner.md .claude/skills/do-all/SKILL.md` |
 
 For every "absent/differs" — one line: what, where, which `principles.md` section it refers
 to, what to change (no edits — report only). At the end — the three most costly divergences and
@@ -353,7 +352,7 @@ a proposal: file them as `[MANUAL]` tasks in `todo.md` (writing — only at the 
   are not rewritten; `settings.local.json` is neither read nor copied; the only git write is
   `git mv` of the state files per U2.
 - Do not run `/do-next`, do not commit, do not push, do not change `.env*`, `.git/config`.
-- Outside the target repo the skill writes only by installing the owner's tools (the Codex plugin,
+- Outside the target repo the skill writes only by installing the owner's tools (the
   Codex CLI, `image_generation`, rembg MCP) and only per `tools.md`: the commands are shown in
   advance, consent — via `AskUserQuestion`, only what was checked is installed; `audit` installs
   nothing.

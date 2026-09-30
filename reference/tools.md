@@ -24,15 +24,14 @@ files outside the phase 3 list".
 5. **After installation** — repeat the detection, update the row in the reconnaissance table; the
    interview recommendations (A2, "Assets") are computed from the new state.
 6. `audit` installs nothing: detection → a report with the §2 commands.
-7. The skill does not perform interactive steps (`codex login`, session restart, `/reload-plugins`) —
+7. The skill does not perform interactive steps (`codex login`, session restart) —
    always `[OWNER]`; for the login, suggest `! codex login` right in the session prompt.
 
 ## 2. Tools table
 
 | Tool                           | When to offer                                      | Detection                                                                                                                                                                               | Installation after consent                                                                                                                                                                                                                                | Left to `[OWNER]`                                                                   |
 | ------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Plugin `codex@openai-codex`    | always (init/upgrade, after the reconnaissance table) | `claude plugin list --json \| jq -e '.[] \| select(.id=="codex@openai-codex" and .enabled)'`; no such subcommand — `jq '(.plugins // .)["codex@openai-codex"]' ~/.claude/plugins/installed_plugins.json` | `claude plugin marketplace add openai/codex-plugin-cc` → `claude plugin install codex@openai-codex` (scope `user`). Requires `node` ≥ 18.18 (`node --version`); if missing — `[OWNER]` only                                                                 | `/reload-plugins` or a session restart; `/codex:setup` will show readiness          |
-| Codex CLI                      | together with the plugin                           | `command -v codex && codex --version`                                                                                                                                                   | `npm i -g @openai/codex` (requires `npm`; if missing — `[OWNER]` with a link to the plugin README)                                                                                                                                                         | `codex login` (ChatGPT subscription or API key)                                     |
+| Codex CLI                      | always (init/upgrade, after the reconnaissance table) | `command -v codex && codex --version && codex login status`                                                                                                                                                | `npm i -g @openai/codex` (requires `npm`; if missing — `[OWNER]` with <https://github.com/openai/codex>)                                                                                                                                                         | `codex login` (ChatGPT subscription or API key)                                     |
 | Image generation in Codex      | the "Assets" knob includes `codex`                 | `codex features list \| grep -E '^image_generation +[^ ]+ +true'`                                                                                                                         | `codex features enable image_generation` (writes to `~/.codex/config.toml`)                                                                                                                                                                                | —                                                                                   |
 | rembg MCP (background removal) | the "Assets" knob includes `rembg`                 | `claude mcp get rembg` (exit code 0 and `Connected`)                                                                                                                                    | `git clone https://github.com/croef/rembg-mcp ~/rembg-mcp` → `cd ~/rembg-mcp && python3 -m venv rembg && rembg/bin/pip install --upgrade pip && rembg/bin/pip install mcp "rembg[cpu,cli]" pillow && rembg/bin/pip install -e .` → `claude mcp add rembg -s user -- ~/rembg-mcp/start_server.sh` | a session restart (MCP servers are read at startup)                                 |
 
@@ -51,10 +50,9 @@ any (`birefnet-general` gives higher quality).
 ## 3. What the skill does not do
 
 - It installs nothing silently and nothing "while at it": only what was checked in the §1.3 question.
-- It does not write the plugin into the project `.claude/settings.json`
-  (`enabledPlugins`/`extraKnownMarketplaces`): since Claude Code 2.1.195 a plugin from an external
-  source is not installed that way — Claude Code merely shows the same `claude plugin install`
-  command.
-- It does not update what is already installed (`claude plugin update`, `npm update -g`) — that is
-  the owner's version.
+- It does not install the `codex@openai-codex` Claude Code plugin: the pipeline calls the Codex
+  CLI directly (since 2026-09-30); an owner who has the plugin keeps it for their own `/codex:*`
+  commands, the pipeline does not use it.
+- It does not update what is already installed (`npm update -g`, `brew upgrade`) — that is the
+  owner's version.
 - It does not enter or read keys and tokens; `codex login` is for the owner only.
