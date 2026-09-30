@@ -172,7 +172,7 @@ both groups and lists them in the report.
   model" in the prompts, and the emergency switch `CLAUDE_CODE_SUBAGENT_MODEL=<fallback>` in the
   environment.
 - Models age: agents name families (`opus`/`fable`/`sonnet`), which Claude Code resolves to the
-  newest version, and the Codex model lives in one constant of `review-tier.sh`, which prints
+  newest version, and the Codex model lives in the tier constants of `review-tier.sh`, which prints
   `MODEL_WARN=` when the local Codex catalog marks it as missing, retiring, older or
   previous-generation. Which family leads is re-checked by the skill on every init/upgrade/audit. History: until 2026-09-23 the
   defaults were `fable` for runner/coder/architect/reviewer with an `opus` fallback and Codex

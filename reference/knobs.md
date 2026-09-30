@@ -44,24 +44,50 @@ one model. Guideline: ≤10 globs.
 
 Inside the choice:
 
-- **Codex model** — the catalogue is `~/.codex/models_cache.json`, the owner's current choice is
-  `~/.codex/config.toml` (`model =`); both are checked for freshness per section E. Options:
-  `gpt-6.1-sol` (default: "Latest workhorse model for coding" in the catalogue since 2026-09-30) ·
-  `gpt-6-sol` (flagged "Previous generation" since 2026-09-30; the default 2026-09-23..30) ·
-  `gpt-6-astra` (frontier; more Codex quota per review; in the second source repo since 05.09.2026,
-  flat `high`) · `gpt-5.6-sol` (older; half a year of runs in the first repo, `high`/`xhigh` by
-  tier) · whatever else the catalogue lists. Recommendation: the owner's `config.toml` model, unless
-  section E flags it (missing, retiring, "Older"/"Legacy"/"Previous"); flagged → the current coding model by
-  the E leader rule (today `gpt-6.1-sol`), the owner's value as the second option labelled "current".
-  The recommended model must be in the catalogue at reconnaissance time — a rollout may not have
-  reached this account yet.
-- **Codex effort** (`CODEX_EFFORT_R12` / `CODEX_EFFORT_R3`): `high`/`xhigh` by tier (default; the
-  first repo's scheme: the depth goes where a mistake is expensive, small tasks stay fast) · flat
-  `xhigh` (on `gpt-6-sol`, half the price of `gpt-5.6-sol`, it cost about what `high`/`xhigh` did there;
-  − every R1 review takes longer) · flat `high` (the second repo; cheapest, no margin on R3) · `max` on R3
-  (accepted since the wrapper calls the CLI directly, 2026-09-30; slower and more quota, not yet
-  compared with `xhigh` in `runs.log`). The wrapper accepts `low|medium|high|xhigh|max`; `ultra` is
-  refused by design: it delegates subtasks on its own, so review time becomes unpredictable.
+- **Codex model by tier** (`CODEX_MODEL_R12` / `CODEX_MODEL_R3`). Facts (E §1): `gpt-6.1-sol` is
+  2 points below `gpt-6-astra` on the Artificial Analysis Coding Agent Index at about a fifth of the
+  price ($2/$10 against $10/$50 per 1M tokens); a review on Astra also spends more of the Codex
+  plan. Options:
+
+  | Option | + | − |
+  | --- | --- | --- |
+  | `gpt-6.1-sol` on all tiers | near-Astra on code, the cheapest and fastest; the plan lasts longest | R3 does not get the strongest model |
+  | `gpt-6.1-sol` on R1/R2 + `gpt-6-astra` on R3 | the strongest model exactly where a missed S1 costs money, access or data; the extra cost only on R3 tasks | ~5× per R3 review; R3 already has a second reader (Claude), so the gain is the margin of ~2 points |
+  | `gpt-6-astra` on all tiers | the maximum everywhere | ~5× per review on every task, the plan runs out soonest; the ~2-point margin rarely matters on small diffs |
+  | the owner's `config.toml` model or another model from the catalogue | the owner's habit | recommended only when unflagged and it names coding as its purpose |
+
+  **Recommendation rule** (the reason line names the facts):
+  1. Flagged models (section E: missing, retiring, "Older"/"Legacy"/"Previous") and models missing
+     from the catalogue at reconnaissance time are never recommended; the owner's flagged value is
+     the second option labelled "current".
+  2. **S1 domains** — A1 includes money (payments, billing, pricing), access (auth, permissions),
+     personal data, or irreversible data changes (migrations, schema). **R3 share** — commits of the
+     last 90 days that touch the A1 globs, out of all commits of the period
+     (`git log --since='90 days ago' --format=@ --name-only`, count commits with at least one path
+     matching the globs); fewer than 20 commits in the period — say "unknown" and treat it as low.
+  3. S1 domains and R3 share ≤ 25% → `gpt-6.1-sol` + `gpt-6-astra` on R3 ("a missed S1 here costs
+     <domain>; R3 is <n>% of the work, so Astra adds cost only there").
+  4. S1 domains and R3 share > 25% → `gpt-6.1-sol` on all tiers; Astra on R3 is the second option
+     with its cost ("R3 is <n>% of the work: Astra there is ~5× on most reviews for ~2 points").
+  5. No S1 domains (tooling, content, docs, a pet project) → `gpt-6.1-sol` on all tiers.
+  6. The owner's `config.toml` uses `gpt-6-astra` → they already pay for it interactively: keep the
+     rule's option first and show Astra on all tiers as "current".
+- **Codex effort by tier** (`CODEX_EFFORT_R12` / `CODEX_EFFORT_R3`). Facts (E §1): on `gpt-6.1-sol`
+  `xhigh` beats `max` by 3 points on the Coding Agent Index, and `low`/`medium` are the most
+  token-efficient. The wrapper accepts `low|medium|high|xhigh|max`; `ultra` is refused by design (it
+  delegates subtasks on its own, so review time becomes unpredictable). Options:
+
+  | Option | + | − |
+  | --- | --- | --- |
+  | `high` / `xhigh` by tier | depth where a mistake is expensive, small tasks stay fast (the first repo's scheme) | R1/R2 reviews are shallower than R3 |
+  | flat `xhigh` | the deepest useful setting on every review | every R1 review takes longer and spends more of the plan |
+  | `medium` / `high` by tier | fastest and cheapest; fits a long queue of small tasks | the least margin on R3 |
+  | `max` on R3 | — | on `gpt-6.1-sol` it scores below `xhigh` and runs longer; offer it only for a model where section E shows a gain |
+
+  **Recommendation rule:** S1 domains → `high`/`xhigh`; A3 is `strict` → flat `xhigh` (the owner
+  already pays for depth on every task); no S1 domains and A3 is `light` → `medium`/`high`;
+  otherwise → `high`/`xhigh`. The owner's `model_reasoning_effort` from `config.toml` is their
+  interactive habit, not a review setting: show it only when it matches one of the options.
 - **Claude reviewer model** (`reviewer.md` → `model:`): the primary Claude family of section E —
   `opus` (default) / `fable` (a different model from the coder's; more expensive).
   **Consolidator** (`review-consolidator.md`): `opus` (default; it reads two reports and
@@ -79,7 +105,7 @@ log in (commands — `tools.md`); then `REVIEW_BACKEND=both`" in the report; the
 `codex-reviewer.md` template is installed anyway. "Codex only" — `REVIEW_BACKEND=codex`: there is no
 Claude reader, `double → single`, no consolidator.
 
-**Changes:** `REVIEW_BACKEND`, `CODEX_MODEL`, `CODEX_EFFORT_R12`, `CODEX_EFFORT_R3` in
+**Changes:** `REVIEW_BACKEND`, `CODEX_MODEL_R12`, `CODEX_MODEL_R3`, `CODEX_EFFORT_R12`, `CODEX_EFFORT_R3` in
 `review-tier.sh`; `model:` in the frontmatter of `reviewer.md`, `review-consolidator.md`.
 
 ### A3. Strictness of the review scheme → `REVIEW_PROFILE`
@@ -196,7 +222,7 @@ that exist and were edited within the last 90 days (`git log --since`).
 | `{{AGENTS_IMPORT}}` | the bare line `@AGENTS.md` (no backticks and no indent — otherwise Claude Code will not expand the import): when `CLAUDE.md` exists, the native reading of `AGENTS.md` (Claude Code ≥2.1.277) does not kick in, the import works on any version and does not cause a double read; empty if the owner already imports `AGENTS.md` outside the section | `CLAUDE.section.md` |
 | `{{DOMAIN_CHECKLIST_QUOTED}}`, `{{UI_CHECKLIST_QUOTED}}` | the same checklists, every line prefixed with `> ` (a quote inside the Codex prompt) | `codex-reviewer.md` |
 | `{{CRITICAL_GLOBS}}` | a marker line in the array; replaced with the items from A1, one per line, in quotes | `review-tier.sh` |
-| `{{REVIEW_PROFILE}}`, `{{CODEX_MODEL}}` | the values from A3/A2 — for the text of `CLAUDE.md` | `CLAUDE.section.md` |
+| `{{REVIEW_PROFILE}}`, `{{CODEX_MODEL}}` | the values from A3/A2 — for the text of `CLAUDE.md`; for `{{CODEX_MODEL}}`: one model, or `<R1/R2 model>, R3: <R3 model>` when they differ | `CLAUDE.section.md` |
 | `{{FALLBACK_MODEL}}` | the fallback family from A4 (the other of `opus`/`fable`, today `fable`); the same value as `__FALLBACK_MODEL__` | `task-runner.md`, `do-all/SKILL.md`, `CLAUDE.section.md` |
 | `{{CRITICAL_SUMMARY}}` | the critical paths from A1 in words ("payments, auth, migrations") | `CLAUDE.section.md` |
 | `{{STACK_SUMMARY}}`, `{{COMMANDS_TABLE}}` | the stack in one line; the commands table (tests/types/lint/build/dev server) from reconnaissance | `AGENTS.section.md` |
@@ -302,8 +328,8 @@ transcript). The model and effort of any call are visible in its transcript
 
 | Slug | Catalogue description | Status |
 | --- | --- | --- |
-| `gpt-6.1-sol` | Latest workhorse model for coding and everyday work | default `CODEX_MODEL` since 2026-09-30; answered this account through the plugin and through `codex exec` (CLI 0.159.2) at `low`, `high` and `max` on 2026-09-30; absent from the catalogue that the ChatGPT app's bundled codex 0.155.0 receives |
-| `gpt-6-astra` | Frontier intelligence for the most demanding work | the maximum option; more Codex quota per call |
+| `gpt-6.1-sol` | Latest workhorse model for coding and everyday work | default `CODEX_MODEL_R12`/`CODEX_MODEL_R3` since 2026-09-30; released 2026-09-29, $2/$10 in the API; Artificial Analysis: Intelligence Index 52 (Astra 53), Coding Agent Index 2 points below Astra, `xhigh` 3 points above `max` on it, ~22% of Astra's cost per task; answered this account through the plugin and through `codex exec` (CLI 0.159.2) at `low`, `high` and `max` on 2026-09-30; absent from the catalogue that the ChatGPT app's bundled codex 0.155.0 receives |
+| `gpt-6-astra` | Frontier intelligence for the most demanding work | released 2026-09-03, $10/$50 in the API; Terminal-Bench 4.0 57.9%; the R3 option for projects with S1 domains and a small R3 share (A2) |
 | `gpt-6-sol` | Previous generation workhorse model | flagged "Previous" — the default 2026-09-23..30; released 2026-09-22, $2/$10 in the API |
 | `gpt-6-luna` | Fast and affordable model for easier tasks | not for review |
 | `gpt-5.6-sol` | Older generation workhorse model | flagged "Older" |
@@ -316,11 +342,15 @@ path until 2026-09-30, stopped at `xhigh`); `ultra` is refused by design.
 and `gpt-6.1-sol` replaced `gpt-6-sol` a week later, on vendor figures, not on runs. After ~20
 tasks compare `rounds=`, `found=`, `verdict=` in `.claude/state/runs.log` with the lines before the
 switch: more second rounds, or S1/S2 that only one reviewer finds → consider `fable` for
-`coder`/`reviewer` or Codex flat `xhigh`.
+`coder`/`reviewer`, Codex flat `xhigh`, or `gpt-6-astra` on R3. With Astra on R3, compare R3 lines
+of `runs.log` before and after: no S1/S2 that Codex found and the Claude reader missed → Astra did
+not pay for itself.
 
 Sources: <https://www.anthropic.com/claude-opus-5-5> ·
 <https://www.anthropic.com/claude-fable-and-mythos-5-1> ·
-<https://venturebeat.com/technology/openai-releases-gpt-6-sol-and-luna-models-slashing-api-costs-50-or-more>
+<https://venturebeat.com/technology/openai-releases-gpt-6-sol-and-luna-models-slashing-api-costs-50-or-more> ·
+<https://artificialanalysis.ai/articles/gpt-6-1-sol-replaces-gpt-6-sol-after-just-7-days-with-near-astra-intelligence> ·
+<https://pasqualepillitteri.it/en/news/14246/openai-launches-gpt-6-astra-pricing-benchmarks>
 
 ### 2. Codex check — local, no network
 
@@ -336,7 +366,7 @@ A model is **flagged** when it is missing from the catalogue, has an `upgrade` f
 date, successor), or its description starts with "Older"/"Legacy"/"Previous". An effort is flagged when the
 wrapper's set or the model's `supported_reasoning_levels` lacks it. These are the same rules as
 `MODEL_WARN=`. Check three values: the template default, the owner's `config.toml` `model`, and (in
-`upgrade`/`audit`) the repo's `CODEX_MODEL`/`CODEX_EFFORT_*`. Every Codex client on the machine (the
+`upgrade`/`audit`) the repo's `CODEX_MODEL_*`/`CODEX_EFFORT_*`. Every Codex client on the machine (the
 CLI, the ChatGPT app, the IDE extension) rewrites the same catalogue, and the server sends an older
 client a shorter list: on 2026-09-23 the app's codex 0.154.0 got no GPT-6 models while CLI 0.156.1
 did (and on 2026-09-30 the app's codex 0.155.0 got no `gpt-6.1-sol` while CLI 0.159.2 did). The
@@ -376,10 +406,12 @@ owner: "update `knobs.md` E in the skill repository".
   (`{{FALLBACK_MODEL}}`, `fallbackModel`) — the other of `opus`/`fable`, never the runner's own model.
   `researcher` and `review-consolidator` — `opus`, unless Opus stops being the cheaper of the two
   strong families. `tester`, `committer`, `codex-reviewer` — `sonnet`.
-- **Codex** — `CODEX_MODEL` is the newest unflagged model whose description names coding as its
-  purpose (today `gpt-6.1-sol`). Frontier models (`gpt-6-astra`) are offered only as an explicit
-  option, because of the quota. Effort — by tier: `high` on R1/R2, `xhigh` on R3 (`max` is an
-  explicit option until `runs.log` shows `xhigh` missing S1/S2 on R3).
+- **Codex** — the base model (`CODEX_MODEL_R12`, and `CODEX_MODEL_R3` unless A2 says otherwise)
+  is the newest unflagged model whose description names coding as its purpose (today
+  `gpt-6.1-sol`). The frontier model (`gpt-6-astra`) goes to R3 only by the A2 rule (S1 domains, a
+  small R3 share), because of its price. Effort — by the A2 rule, by default `high` on R1/R2 and
+  `xhigh` on R3; `max` only for a model where the vendor or an independent index shows it above
+  `xhigh`.
 - A flagged current value (the owner's `config.toml`, the repo's files) never becomes the
   recommendation: recommend by this rule and give the current value as the second option labelled
   "current" (`upgrade.md` §2).

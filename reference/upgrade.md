@@ -51,7 +51,7 @@ state files; untracked files in these paths are a reason to stop under the clean
 
 | Setting | Own | Foreign (heuristics) |
 | --- | --- | --- |
-| `CRITICAL_GLOBS`, `REVIEW_PROFILE`, `REVIEW_BACKEND`, `CODEX_MODEL`, `CODEX_EFFORT_*`, thresholds | the PROJECT block of `review-tier.sh` | the `knobs.md` A1/A3 rules from reconnaissance; plus the paths that the old agents call critical ("security", "safety", "payments", "auth") |
+| `CRITICAL_GLOBS`, `REVIEW_PROFILE`, `REVIEW_BACKEND`, `CODEX_MODEL_*`, `CODEX_EFFORT_*`, thresholds | the PROJECT block of `review-tier.sh` (a single `CODEX_MODEL` of an older version → both `CODEX_MODEL_R12` and `CODEX_MODEL_R3`, then the A2 rule) | the `knobs.md` A1/A2/A3 rules from reconnaissance; plus the paths that the old agents call critical ("security", "safety", "payments", "auth") |
 | `PROTECTED_FILES`, secret patterns | the PROJECT block of `safety-check.sh` | `grep -nE 'secret\|token\|key\|BLOCK\|pattern' .claude/hooks/*.sh` — show the lines to the owner |
 | `model:`, `effort:` of the roles | the frontmatter of the agents of the same name | the same; for roles the repo does not have (`task-runner`, `codex-reviewer`, `review-consolidator`) — the `knobs.md` A4 default |
 | `fallbackModel`, `{{FALLBACK_MODEL}}` | `settings.json` → `fallbackModel`; the `model: "…"` of the "Model fallback" rule in `task-runner.md` | the same; a fallback equal to the runner's own model (the old default `opus` next to an `opus` runner) is flagged — `knobs.md` A4 |
@@ -66,7 +66,7 @@ state files; untracked files in these paths are a reason to stop under the clean
 Rule: in the interview "**Recommended for this project: <current> — because that is what is set now
 in `<file>:<line>`**". The current value contradicts a `knobs.md` rule (for example, `light` with
 money in A1 or `sonnet` for `coder` on domain logic) → recommend per `knobs.md`, give the current
-value as the second option labelled "current". The same for models: a current `CODEX_MODEL`,
+value as the second option labelled "current". The same for models: a current `CODEX_MODEL_*`,
 `CODEX_EFFORT_*` or role `model:` that `knobs.md` E flags (a missing, retiring, "Older" or "Previous" Codex
 model, an effort the wrapper rejects, a Claude family that is no longer the leader, a fallback equal
 to the primary) is not recommended just because it is set now — recommend by the E leader rule and

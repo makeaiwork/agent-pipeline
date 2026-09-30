@@ -157,8 +157,8 @@ How to call the reviewers:
    this is the round memory that survives compaction. In round 2 pass `threadId: <id>` in the
    @codex-reviewer prompt, and it will resume the same Codex thread (the round 1 context is not
    lost). No such line — round 2 goes as a new call, say so in the report. **The tier grew between
-   rounds** (round 2 effort is higher) — do NOT pass `threadId`: the thread resumes with the old
-   effort, and a new one is needed.
+   rounds** (round 2 effort or model differs) — do NOT pass `threadId`: the round 1 thread was
+   reasoned at another depth or by another model, and a new one is needed.
 4. **`CODEX=none` with `ROUND1≠none`** (profile or `REVIEW_BACKEND=claude`) — do not call
    @codex-reviewer at all: @reviewer takes its place in the same mode, as with `UNAVAILABLE` below.
 5. **Codex returned `UNAVAILABLE`** — @reviewer takes its place in the same mode: with

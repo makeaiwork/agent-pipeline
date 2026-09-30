@@ -25,7 +25,7 @@ runner's dev server — see `task-runner.md`, worktree.
 
 The tier and the review composition are decided by the script `.claude/scripts/review-tier.sh` (by
 the files and lines of the diff; critical paths, thresholds, the profile `{{REVIEW_PROFILE}}`, the
-backend `{{REVIEW_BACKEND}}` and the Codex model `{{CODEX_MODEL}}` live only in it). Tiers: `R0` —
+backend `{{REVIEW_BACKEND}}` and the Codex model by tier `{{CODEX_MODEL}}` live only in it). Tiers: `R0` —
 bookkeeping and small docs, no review; `R1` — docs-only and code ≤2 files/≤60 lines; `R2` — other
 code; `R3` — critical paths ({{CRITICAL_SUMMARY}}, `.claude/**`). The round composition is printed
 in the fields `ROUND1` (`none|single|double`), `ROUND2` (`none|light|escalate|double`),

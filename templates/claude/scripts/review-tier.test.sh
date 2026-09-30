@@ -27,7 +27,8 @@ make_variant() { # <out> <profile> <globs-line> [backend]
     skip { next }
     /^REVIEW_PROFILE=/ { print "REVIEW_PROFILE=\"" prof "\""; next }
     /^REVIEW_BACKEND=/ { print "REVIEW_BACKEND=\"" backend "\""; next }
-    /^CODEX_MODEL=/ { print "CODEX_MODEL=\"gpt-6.1-sol\""; next }
+    /^CODEX_MODEL_R12=/ { print "CODEX_MODEL_R12=\"gpt-6.1-sol\""; next }
+    /^CODEX_MODEL_R3=/ { print "CODEX_MODEL_R3=\"gpt-6.1-sol\""; next }
     /^CODEX_EFFORT_R12=/ { print "CODEX_EFFORT_R12=\"high\""; next }
     /^CODEX_EFFORT_R3=/ { print "CODEX_EFFORT_R3=\"xhigh\""; next }
     { print }
@@ -215,6 +216,12 @@ check "ROUND1 on R1" "$(field "$SCRIPT" ROUND1)" "single"
 fresh_repo; add_lines todo.md 1
 check "CODEX_MODEL on R0" "$(field "$SCRIPT" CODEX_MODEL)" "none"
 check "ROUND1 on R0" "$(field "$SCRIPT" ROUND1)" "none"
+# a separate R3 model (e.g. gpt-6-astra): only R3 gets it, R1/R2 keep CODEX_MODEL_R12
+ASTRA="$TMP/review-tier.astra.sh"; sed 's/^CODEX_MODEL_R3=.*/CODEX_MODEL_R3="gpt-6-astra"/' "$SCRIPT" > "$ASTRA"
+fresh_repo; add_lines server/auth.ts 1
+check "CODEX_MODEL_R3 on R3" "$(field "$ASTRA" CODEX_MODEL)" "gpt-6-astra"
+fresh_repo; add_lines server/x.ts 2
+check "CODEX_MODEL_R12 on R1" "$(field "$ASTRA" CODEX_MODEL)" "gpt-6.1-sol"
 
 # 30. Profile strict: R1 → round 2 escalation; R2 → round 1 double + round 2 double; R3 → round 2 double
 fresh_repo; add_lines server/x.ts 2;  expect "strict R1" R1 high escalate --script "$STRICT"

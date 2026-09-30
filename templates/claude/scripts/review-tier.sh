@@ -15,7 +15,7 @@
 #
 #   TIER=R0|R1|R2|R3
 #   CODEX=none|<effort>          # Codex effort in BOTH rounds (by tier, see the PROJECT block); R0 — not called
-#   CODEX_MODEL=none|<model>     # Codex model — the single source for agents, never hardcoded in prompts
+#   CODEX_MODEL=none|<model>     # Codex model in BOTH rounds (by tier) — the single source for agents, never hardcoded in prompts
 #   ROUND1=none|single|double    # round 1: single — one @codex-reviewer; double — @reviewer ‖ @codex-reviewer (+ consolidator)
 #   ROUND2=none|light|escalate|double   # round 2 (only on confirmed S1/S2): light — one Codex verify;
 #                                       # escalate — Codex verify ‖ full @reviewer; double — both in verify mode
@@ -63,10 +63,11 @@ BINARY_LINES=1000        # a binary file counts as "large"
 
 # Codex: model and effort by tier. Agents take them ONLY from this script's output (CODEX_MODEL=, CODEX=).
 # The current model catalog is ~/.codex/models_cache.json (MODEL_WARN= below checks the model against it).
-# Changing the model is one constant here.
-CODEX_MODEL="gpt-6.1-sol"
-CODEX_EFFORT_R12="high"  # R1/R2, both rounds
-CODEX_EFFORT_R3="xhigh"  # R3, both rounds
+# Changing the model is a constant here; the choice per project — knobs.md A2 of the agent-pipeline skill.
+CODEX_MODEL_R12="gpt-6.1-sol"  # R1/R2, both rounds
+CODEX_MODEL_R3="gpt-6.1-sol"   # R3, both rounds (gpt-6-astra where a missed S1 is expensive and R3 is rare)
+CODEX_EFFORT_R12="high"        # R1/R2, both rounds
+CODEX_EFFORT_R3="xhigh"        # R3, both rounds
 
 # Review strictness profile (init interview, the "strictness" question): standard | strict | light.
 #   standard — round 1: R1/R2 one Codex, R3 @reviewer ‖ Codex + consolidator; round 2 is light everywhere (one Codex verify).
@@ -205,6 +206,8 @@ case "$TIER" in
   R2) CODEX=$CODEX_EFFORT_R12; ROUND1=single; ROUND2=light ;;
   R3) CODEX=$CODEX_EFFORT_R3;  ROUND1=double; ROUND2=light ;;
 esac
+CODEX_MODEL=$CODEX_MODEL_R12
+[ "$TIER" = "R3" ] && CODEX_MODEL=$CODEX_MODEL_R3
 case "$REVIEW_PROFILE" in
   strict)
     case "$TIER" in

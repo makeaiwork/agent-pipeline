@@ -46,7 +46,7 @@ change them and do not rely on the defaults from `~/.codex/config.toml`. Two var
 the caller as the lines `model: <model>` and `effort: <effort>` — the caller takes them from
 `CODEX_MODEL=` and `CODEX=` of the `review-tier.sh` script. The lines are missing — take the
 constants from the script itself:
-`grep -n '^CODEX_' .claude/scripts/review-tier.sh` (`CODEX_MODEL`, `CODEX_EFFORT_R3`); do not
+`grep -n '^CODEX_' .claude/scripts/review-tier.sh` (`CODEX_MODEL_R3`, `CODEX_EFFORT_R3`); do not
 substitute other values, do not pick an effort yourself (the wrapper accepts
 `low|medium|high|xhigh|max` and refuses `ultra`).
 
